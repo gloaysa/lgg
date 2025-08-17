@@ -1,7 +1,6 @@
 # lgg
 
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://github.com/gloaysa/lgg/tree/main?tab=readme-ov-file#)
 
 A tiny, **human-first** command-line journaling tool inspired by [jrnl.sh](https://jrnl.sh).
 
