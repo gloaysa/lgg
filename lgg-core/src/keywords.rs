@@ -8,13 +8,24 @@ use strum_macros::{AsRefStr, EnumIter, EnumString};
 #[strum(serialize_all = "kebab-case")]
 pub enum Keyword {
     At,
+    Monday,
+    Tuesday,
+    Wednesday,
+    Thursday,
+    Friday,
+    Saturday,
+    Sunday,
     Today,
     Yesterday,
     Tomorrow,
     Noon,
+    Evening,
+    Night,
     Midnight,
     #[strum(serialize = "last week")]
     LastWeek,
+    LastMonth,
+    LastYear,
 }
 
 pub struct Keywords;
@@ -43,12 +54,23 @@ impl Keywords {
         static REGISTRY: Lazy<RwLock<HashMap<String, Keyword>>> = Lazy::new(|| {
             let mut m = HashMap::new();
             m.insert("at".to_string(), Keyword::At);
+            m.insert("monday".to_string(), Keyword::Monday);
+            m.insert("tuesday".to_string(), Keyword::Tuesday);
+            m.insert("wednesday".to_string(), Keyword::Wednesday);
+            m.insert("thursday".to_string(), Keyword::Thursday);
+            m.insert("friday".to_string(), Keyword::Friday);
+            m.insert("saturday".to_string(), Keyword::Saturday);
+            m.insert("sunday".to_string(), Keyword::Sunday);
             m.insert("today".to_string(), Keyword::Today);
             m.insert("yesterday".to_string(), Keyword::Yesterday);
             m.insert("tomorrow".to_string(), Keyword::Tomorrow);
             m.insert("noon".to_string(), Keyword::Noon);
+            m.insert("evening".to_string(), Keyword::Evening);
+            m.insert("night".to_string(), Keyword::Night);
             m.insert("midnight".to_string(), Keyword::Midnight);
             m.insert("last week".to_string(), Keyword::LastWeek);
+            m.insert("last month".to_string(), Keyword::LastMonth);
+            m.insert("last year".to_string(), Keyword::LastYear);
 
             RwLock::new(m)
         });
@@ -138,11 +160,6 @@ impl Keywords {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::NaiveDate;
-
-    fn ref_date() -> NaiveDate {
-        NaiveDate::from_ymd_opt(2025, 8, 16).unwrap()
-    }
 
     #[test]
     fn default_constants() {

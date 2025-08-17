@@ -1,4 +1,4 @@
-use chrono::{Duration, Local, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 
 use crate::keywords::{Keyword, Keywords};
 
@@ -131,17 +131,38 @@ pub fn parse_date_token(s: &str, options: Option<ParseOptions>) -> Option<NaiveD
     let formats = options.formats.unwrap_or(DEFAULT_FORMATS);
 
     if Keywords::matches(Keyword::Today, s) {
-        Some(reference_date)
-    } else if Keywords::matches(Keyword::Yesterday, s) {
-        Some(reference_date - Duration::days(1))
-    } else if Keywords::matches(Keyword::Tomorrow, s) {
-        Some(reference_date + Duration::days(1))
-    } else {
-        formats
-            .iter()
-            .filter_map(|fmt| NaiveDate::parse_from_str(s, fmt).ok())
-            .next()
+        return Some(reference_date);
     }
+    if Keywords::matches(Keyword::Yesterday, s) {
+        return Some(reference_date - Duration::days(1));
+    }
+    if Keywords::matches(Keyword::Tomorrow, s) {
+        return Some(reference_date + Duration::days(1));
+    }
+
+    let day_keyword = [
+        (Keyword::Monday, Weekday::Mon),
+        (Keyword::Tuesday, Weekday::Tue),
+        (Keyword::Wednesday, Weekday::Wed),
+        (Keyword::Thursday, Weekday::Thu),
+        (Keyword::Friday, Weekday::Fri),
+        (Keyword::Saturday, Weekday::Sat),
+        (Keyword::Sunday, Weekday::Sun),
+    ]
+    .iter()
+    .find(|(keyword, _)| Keywords::matches(*keyword, s));
+
+    if let Some((_, weekday)) = day_keyword {
+        let today_wd = reference_date.weekday();
+        let days_ago = (today_wd.num_days_from_monday() + 7 - weekday.num_days_from_monday()) % 7;
+        return Some(reference_date - Duration::days(days_ago as i64));
+    }
+
+    // Fallback to formatted dates
+    formats
+        .iter()
+        .filter_map(|fmt| NaiveDate::parse_from_str(s, fmt).ok())
+        .next()
 }
 
 /// Parses a string token into a specific time of day (`NaiveTime`).
@@ -179,9 +200,17 @@ pub fn parse_date_token(s: &str, options: Option<ParseOptions>) -> Option<NaiveD
 /// assert_eq!(three_oclock, NaiveTime::from_hms_opt(15, 0, 0).unwrap());
 /// ```
 pub fn parse_time_token(s: &str) -> Option<NaiveTime> {
-    // TODO: Add more keywords. We should document all this somewhere...
+    if Keywords::matches(Keyword::Now, s) {
+        return Some(Local::now().time());
+    }
     if Keywords::matches(Keyword::Noon, s) {
         return NaiveTime::from_hms_opt(12, 0, 0);
+    }
+    if Keywords::matches(Keyword::Evening, s) {
+        return NaiveTime::from_hms_opt(18, 0, 0);
+    }
+    if Keywords::matches(Keyword::Night, s) {
+        return NaiveTime::from_hms_opt(21, 0, 0);
     }
     if Keywords::matches(Keyword::Midnight, s) {
         return NaiveTime::from_hms_opt(0, 0, 0);
@@ -407,5 +436,36 @@ mod tests {
         let p = parse_entry("today: # My Title ##\n### Body", opts(anchor));
         assert_eq!(p.title, "My Title");
         assert_eq!(p.body, "### Body");
+    }
+
+    #[test]
+    fn natural_days_of_week() {
+        // Anchor date is a Wednesday
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 20).unwrap();
+        let p_opts = opts(anchor);
+
+        // Test parsing of each day of the week relative to the anchor
+        let monday = parse_date_token("monday", p_opts).unwrap();
+        assert_eq!(monday, NaiveDate::from_ymd_opt(2025, 8, 18).unwrap());
+
+        let tuesday = parse_date_token("tuesday", p_opts).unwrap();
+        assert_eq!(tuesday, NaiveDate::from_ymd_opt(2025, 8, 19).unwrap());
+
+        // A day keyword matching the anchor date should return the anchor date
+        let wednesday = parse_date_token("wednesday", p_opts).unwrap();
+        assert_eq!(wednesday, anchor);
+
+        // Days from the "previous week" should resolve correctly
+        let thursday = parse_date_token("thursday", p_opts).unwrap();
+        assert_eq!(thursday, NaiveDate::from_ymd_opt(2025, 8, 14).unwrap());
+
+        let friday = parse_date_token("friday", p_opts).unwrap();
+        assert_eq!(friday, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
+
+        let saturday = parse_date_token("saturday", p_opts).unwrap();
+        assert_eq!(saturday, NaiveDate::from_ymd_opt(2025, 8, 16).unwrap());
+
+        let sunday = parse_date_token("sunday", p_opts).unwrap();
+        assert_eq!(sunday, NaiveDate::from_ymd_opt(2025, 8, 17).unwrap());
     }
 }
