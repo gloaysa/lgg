@@ -1,0 +1,3 @@
+[workspace]
+members = ["lgg-core", "lgg"]
+resolver = "2"

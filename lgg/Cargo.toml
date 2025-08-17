@@ -1,0 +1,11 @@
+[package]
+name = "lgg"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lgg-core = { path = "../lgg-core" }
+clap = { version = "4", features = ["derive"] }
+directories = "6.0.0"
+anyhow = "1.0.99"
+tempfile = "3.20.0"
