@@ -81,7 +81,6 @@ You can use the following keywords (and user-defined synonyms) to specify dates 
 
 **Times of Day**
 
-- `now`
 - `morning` (08:00)
 - `noon` (12:00)
 - `evening` (18:00)
@@ -103,7 +102,8 @@ lgg --on yesterday
 # See all entries from a specific date
 lgg --on 2025-08-15
 
-# You can use the days of the week too, it will fallback to the closest day in the past
+# You can use the days of the week too,
+# it will fallback to the closest day in the past
 lgg --on monday
 ```
 
@@ -129,7 +129,7 @@ journal_dir = "/path/to/your/journal"
 # If not set, it falls back to $VISUAL, then $EDITOR, then "vim".
 editor = "hx"
 
-# The time to use for an entry when only a date is provided (e.g., "yesterday: ...").
+# The time to use for an entry when only a date is provided (eg "yesterday").
 # Format is "HH:MM".
 default_time = "21:00"
 
@@ -148,6 +148,7 @@ tmrw = "tomorrow"
 # You can even use it to add translations
 # Spanish
 ayer = "yesterday"
+"a las" = "at"
 
 # German
 gestern = "yesterday"
@@ -157,6 +158,8 @@ ieri = "yesterday"
 
 # Japanese
 kino = "yesterday"
+
+# now you can do: kino a las 3: I had coffe yesterday at 3.
 ```
 
 ## Roadmap
