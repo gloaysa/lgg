@@ -23,19 +23,74 @@ _(Instructions to be added once packaging is set up.)_
 
 ### Creating Entries
 
-`lgg` is designed to be intuitive. Text you provide is saved as a new entry for today.
+`lgg` is designed for quick, natural language logging. Text you provide is saved as a new entry. The first sentence ending with a period (`.`) or the first line is treated as the title, and the rest becomes the body.
+
+**Basic Usage**
 
 ```sh
-# Write a quick entry for today
-lgg Wrote the first draft of the README.
+# Write a quick entry for today. "A new entry" is the title.
+lgg A new entry. The rest is the body.
 
 # Open your default editor ($VISUAL/$EDITOR) to write a longer entry
 lgg
-
-# Create an entry for a specific day
-lgg yesterday: Finally fixed that annoying bug.
-lgg 2025-08-15: Started a new side project.
 ```
+
+**Using Dates and Times**
+
+You can specify a date and time for your entry in a flexible, human-readable format. If you only provide a date, the time will be set to the `default_time` in your configuration (21:00 or 9 PM by default).
+
+The prefix before the colon (`:`) is parsed for date and time information.
+
+```sh
+# Simple date keywords
+lgg yesterday: Finally fixed that annoying bug.
+lgg tomorrow: I will prepare for the big presentation.
+
+# Combine dates and times
+lgg tomorrow at noon: Team lunch. I hope there is pizza.
+lgg today at 6pm: Dinner with family.
+lgg friday at 19:30: Movie night.
+
+# Use days of the week (resolves to the most recent past date)
+lgg monday: Planned the week\'s tasks.
+
+# Use specific dates
+lgg 2025-12-25: Christmas day.
+lgg 2025-12-25 at 8am: Opened presents.
+```
+
+### Available Keywords
+
+You can use the following keywords (and user-defined synonyms) to specify dates and times. Keywords are case-insensitive.
+
+**Relative Dates**
+
+- `today`
+- `yesterday`
+- `tomorrow`
+
+**Days of the Week**
+
+- `monday`
+- `tuesday`
+- `wednesday`
+- `thursday`
+- `friday`
+- `saturday`
+- `sunday`
+
+**Times of Day**
+
+- `now`
+- `morning` (08:00)
+- `noon` (12:00)
+- `evening` (18:00)
+- `night` (21:00)
+- `midnight` (00:00)
+
+**Time Separator**
+
+- `at` (used to separate date and time parts, e.g., `yesterday at 5pm`)
 
 ### Reading Entries
 
@@ -47,6 +102,9 @@ lgg --on yesterday
 
 # See all entries from a specific date
 lgg --on 2025-08-15
+
+# You can use the days of the week too, it will fallback to the closest day in the past
+lgg --on monday
 ```
 
 ## Configuration
@@ -57,7 +115,9 @@ lgg --on 2025-08-15
 - **macOS**: `~/Library/Application Support/lgg/config.toml` or `~/.config/lgg/config.toml`
 - **Windows**: `%APPDATA%\lgg\config.toml`
 
-Here are the available options with their defaults:
+> [!NOTE] You can use the configuration to extend the behaviour of lgg, and even translate it to your language. For that, use the `synonyms` configuration and look at the [keywords](#available-keywords) that can be extended.
+
+Here are all the available options with their defaults:
 
 ```toml
 # The absolute path to the directory where your journal files are stored.
@@ -80,7 +140,7 @@ date_format = "%A, %d %b %Y" # e.g., "Friday, 15 Aug 2025"
 
 # A table of custom synonyms for date keywords.
 # The key is your alias, and the value must be a built-in keyword
-# (today, yesterday, tomorrow, noon, midnight, "last week").
+# (today, yesterday, tomorrow, noon, midnight...).
 [synonyms]
 ytd = "yesterday"
 tmrw = "tomorrow"
