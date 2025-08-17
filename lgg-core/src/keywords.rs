@@ -18,6 +18,7 @@ pub enum Keyword {
     Today,
     Yesterday,
     Tomorrow,
+    Morning,
     Noon,
     Evening,
     Night,
@@ -64,6 +65,7 @@ impl Keywords {
             m.insert("today".to_string(), Keyword::Today);
             m.insert("yesterday".to_string(), Keyword::Yesterday);
             m.insert("tomorrow".to_string(), Keyword::Tomorrow);
+            m.insert("morning".to_string(), Keyword::Morning);
             m.insert("noon".to_string(), Keyword::Noon);
             m.insert("evening".to_string(), Keyword::Evening);
             m.insert("night".to_string(), Keyword::Night);

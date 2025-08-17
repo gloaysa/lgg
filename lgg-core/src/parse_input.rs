@@ -200,8 +200,8 @@ pub fn parse_date_token(s: &str, options: Option<ParseOptions>) -> Option<NaiveD
 /// assert_eq!(three_oclock, NaiveTime::from_hms_opt(15, 0, 0).unwrap());
 /// ```
 pub fn parse_time_token(s: &str) -> Option<NaiveTime> {
-    if Keywords::matches(Keyword::Now, s) {
-        return Some(Local::now().time());
+    if Keywords::matches(Keyword::Morning, s) {
+        return NaiveTime::from_hms_opt(8, 0, 0);
     }
     if Keywords::matches(Keyword::Noon, s) {
         return NaiveTime::from_hms_opt(12, 0, 0);
@@ -215,40 +215,55 @@ pub fn parse_time_token(s: &str) -> Option<NaiveTime> {
     if Keywords::matches(Keyword::Midnight, s) {
         return NaiveTime::from_hms_opt(0, 0, 0);
     }
-    // 12h with am/pm, optional minutes: "6am", "6 pm", "12:30PM"
-    if let Some(stripped) = s.strip_suffix("am").or_else(|| s.strip_suffix("pm")) {
-        let is_pm = s.ends_with("pm");
-        let core = stripped.trim();
-        let (h, m, s) = if let Some(colon) = core.find(':') {
+
+    let lower_s = s.to_ascii_lowercase();
+    if lower_s.ends_with("am") || lower_s.ends_with("pm") {
+        let (core_str, suffix) = s.split_at(s.len() - 2);
+        let is_pm = suffix.to_ascii_lowercase() == "pm";
+        let core = core_str.trim();
+
+        let parts = if let Some(colon) = core.find(':') {
             let (h_str, rest) = core.split_at(colon);
-            let rest = &rest[1..]; // drop ':'
-            let (m_str, s_opt) = if let Some(colon2) = rest.find(':') {
-                let (m_str, s_str) = rest.split_at(colon2);
-                (m_str, Some(&s_str[1..]))
+            let rest = &rest[1..];
+            let (m_str, s_str_opt) = if let Some(colon2) = rest.find(':') {
+                let (m, s_part) = rest.split_at(colon2);
+                (m, Some(&s_part[1..]))
             } else {
                 (rest, None)
             };
-            (
-                h_str.parse::<u32>().ok()?,
-                m_str.parse::<u32>().ok()?,
-                s_opt.and_then(|ss| ss.parse::<u32>().ok()).unwrap_or(0),
-            )
+
+            if let (Ok(h), Ok(m)) = (h_str.parse::<u32>(), m_str.parse::<u32>()) {
+                let s = s_str_opt.and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+                Some((h, m, s))
+            } else {
+                None
+            }
         } else {
-            (core.parse::<u32>().ok()?, 0, 0)
+            if let Ok(h) = core.parse::<u32>() {
+                Some((h, 0, 0))
+            } else {
+                None
+            }
         };
-        if h == 0 || h > 12 || m > 59 || s > 59 {
-            return None;
+
+        if let Some((h, m, s)) = parts {
+            if h == 0 || h > 12 || m > 59 || s > 59 {
+                return None;
+            }
+            let h24 = match (h, is_pm) {
+                (12, false) => 0, // 12am is midnight
+                (12, true) => 12, // 12pm is noon
+                (_, true) => h + 12,
+                (_, false) => h,
+            };
+            return NaiveTime::from_hms_opt(h24, m, s);
+        } else {
+            return None; // Parsing of h,m,s failed
         }
-        let h24 = match (h, is_pm) {
-            (12, false) => 0,
-            (12, true) => 12,
-            (_, true) => h + 12,
-            (_, false) => h,
-        };
-        return NaiveTime::from_hms_opt(h24, m, s);
     }
+
     // 24h: "HH:MM"
-    if let Ok(nt) = NaiveTime::parse_from_str(&s, "%H:%M") {
+    if let Ok(nt) = NaiveTime::parse_from_str(s, "%H:%M") {
         return Some(nt);
     }
     // Single hour (24h format implied): "H" or "HH"
@@ -467,5 +482,86 @@ mod tests {
 
         let sunday = parse_date_token("sunday", p_opts).unwrap();
         assert_eq!(sunday, NaiveDate::from_ymd_opt(2025, 8, 17).unwrap());
+    }
+
+    #[test]
+    fn time_token_parsing() {
+        assert_eq!(
+            parse_time_token("morning"),
+            Some(NaiveTime::from_hms_opt(08, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("noon"),
+            Some(NaiveTime::from_hms_opt(12, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("evening"),
+            Some(NaiveTime::from_hms_opt(18, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("night"),
+            Some(NaiveTime::from_hms_opt(21, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("midnight"),
+            Some(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+        );
+
+        // 12-hour format
+        assert_eq!(
+            parse_time_token("5am"),
+            Some(NaiveTime::from_hms_opt(5, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("5pm"),
+            Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("5:30am"),
+            Some(NaiveTime::from_hms_opt(5, 30, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("5:30 pm"),
+            Some(NaiveTime::from_hms_opt(17, 30, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("12am"),
+            Some(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("12pm"),
+            Some(NaiveTime::from_hms_opt(12, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("5PM"),
+            Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("12:45AM"),
+            Some(NaiveTime::from_hms_opt(0, 45, 0).unwrap())
+        );
+
+        // 24-hour format
+        assert_eq!(
+            parse_time_token("08:00"),
+            Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("23:59"),
+            Some(NaiveTime::from_hms_opt(23, 59, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("8"),
+            Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_time_token("17"),
+            Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap())
+        );
+
+        // Invalid
+        assert!(parse_time_token("25:00").is_none());
+        assert!(parse_time_token("13:00pm").is_none());
+        assert!(parse_time_token("not-a-time").is_none());
     }
 }
