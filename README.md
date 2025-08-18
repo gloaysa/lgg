@@ -68,6 +68,9 @@ You can use the following keywords (and user-defined synonyms) to specify dates 
 - `today`
 - `yesterday`
 - `tomorrow`
+- `last week`
+- `last month`
+- `last year`
 
 **Days of the Week**
 
@@ -93,11 +96,19 @@ You can use the following keywords (and user-defined synonyms) to specify dates 
 
 ### Reading Entries
 
-Use the `--on` flag to view all entries for a given day.
+Use the `--on` flag to view all entries for a given date.
+Use the `--from` flag to view all entries from the give day til today.
+Use the `--to` flag in combination with `--from` to view all entries in a range.
+
+> [!NOTE] The current implementation assumes the user won't try and crashed their own computer.
+> If you provide a `--from` flag with a date very away in the past (01/01/01), you'll be waiting a while.
 
 ```sh
 # See all entries from yesterday
 lgg --on yesterday
+
+# See all entries from last week (notice the '')
+lgg --on 'last week'
 
 # See all entries from a specific date
 lgg --on 2025-08-15
@@ -143,6 +154,7 @@ journal_date_format = "%A, %d %b %Y" # e.g., "Friday, 15 Aug 2025"
 # Uses chrono's strftime format specifiers.
 # See: https://docs.rs/chrono/latest/chrono/format/strftime/
 input_date_formats = ["%d/%m/%Y", "%d%m%Y"]
+
 # A table of custom synonyms for date keywords.
 # The key is your alias, and the value must be a built-in keyword
 # (today, yesterday, tomorrow, noon, midnight...).

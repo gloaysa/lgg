@@ -16,6 +16,9 @@ The MVP is focused on providing the essential features for a command-line journa
 - **Reading & Filtering Mode**:
   - [x] Implement the core query engine to parse journal files into structured entries.
   - [x] Implement the `--on <date>` flag to view all entries for a specific day.
+    - `--from <date>`
+    - `--to <date>` / `--until <date>`
+    - `--short` displays the entry without the body.
   - [x] Implement a resilient query system that returns warnings for malformed files instead of crashing.
 - **Storage**:
   - [x] Store entries in the `YYYY/MM/YYYY-MM-DD.md` file structure.
@@ -25,6 +28,7 @@ The MVP is focused on providing the essential features for a command-line journa
   - [x] Load `config.toml` from standard OS directories.
   - [x] Support for `journal_dir`, `editor`, `default_time`, and `date_format`.
   - [x] Support for date keyword `[synonyms]`.
+  - [x] Support for custom dates in journal entries and queries.
 - **Utility**:
   - [x] `lgg --path` command to print the journal's root directory.
 
@@ -34,12 +38,11 @@ These are the highest-priority features required to complete the MVP.
 
 - **Expand Reading & Filtering Mode**:
   - [ ] Implement remaining CLI flags for filtering entries:
-    - `--from <date>`
-    - `--to <date>` / `--until <date>`
     - `--contains <text>`
-    - `--tagged <tag>`
+    - `--tag <tag>`
     - `-n`/`--limit <count>`
     - `--reverse`
+  - [ ] Better UI on Reader mode, parsing Markdown.
 
 ## Future Ideas (Post-MVP)
 

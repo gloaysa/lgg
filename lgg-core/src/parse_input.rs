@@ -101,69 +101,129 @@ pub fn parse_entry(input: &str, options: Option<ParseOptions>) -> ParsedInline {
     }
 }
 
-/// Parses a string token into a concrete calendar date (`NaiveDate`).
+/// Parses one or two string tokens into a concrete calendar filter (`DateFilter`).
 ///
-/// This function understands several formats, processed in the following order:
-/// 1.  **Relative Keywords**: `today`, `yesterday`, `tomorrow`, and any user-defined
-///     synonyms (case-insensitive). These are resolved relative to `reference_date`.
-/// 2.  **Formatted Dates**: Any format string provided in the `formats` slice,
-///     such as `"%Y-%m-%d"`.
+/// This function resolves the **start** token (`start_date`) and, optionally, an **end** token
+/// (`end_date`) into either a single day or a date range. Resolution happens in this order:
+///
+/// 1. **Relative keywords** (case-insensitive), resolved against `reference_date`:
+///    - Singles: `today`, `yesterday`, `tomorrow`, weekdays (`monday` … `sunday`)
+///    - Ranges:  `last week`, `last month`
+///    - User-defined synonyms are supported via the global `Keywords` registry.
+/// 2. **Formatted dates** using any format string provided by `formats` (e.g. `"%Y-%m-%d"`).
+///
+/// # Behavior
+///
+/// - If the **start** token resolves to a **range**, that range is returned and `end_date` is ignored.
+/// - If the **start** token resolves to a **single day** and `end_date` is:
+///   - **Absent** → returns `Single(start)`.
+///   - **A single day** → returns `Range(start, end)`, **preserving the user’s order**
+///     (no reordering even if `start > end`; consumers may yield no results).
+///   - **A range** → returns that **range** (the `end_date` range wins in this case).
+///
+/// Defaults:
+/// - If `options.reference_date` is `None`, `Local::now().date_naive()` is used.
+/// - If `options.formats` is `None`, `DEFAULT_FORMATS` is used.
 ///
 /// # Arguments
 ///
-/// * `s` - The string slice to parse.
-/// * `options` - An optional [`ParseOptions`] struct to customize parsing behavior.
+/// * `start_date` – Required start token (keyword, weekday, or formatted date).
+/// * `end_date`   – Optional end token (keyword, weekday, or formatted date).
+/// * `options`    – Optional [`ParseOptions`] to control `reference_date` and `formats`.
 ///
 /// # Returns
 ///
-/// `Some(DateFilter)` if parsing is successful, `None` otherwise.
+/// `Some(DateFilter)` if parsing succeeds, `None` otherwise.
 ///
 /// # Examples
 ///
 /// ```
 /// # use chrono::NaiveDate;
 /// # use lgg_core::parse_input::{parse_date_token, ParseOptions, DateFilter};
+///
+/// // Fixed anchor for deterministic tests (Sunday, 2025-08-17)
 /// let opts = ParseOptions {
 ///     reference_date: Some(NaiveDate::from_ymd_opt(2025, 8, 17).unwrap()),
-///     formats: Some(&["%d-%m-%Y"]),
+///     formats: Some(&["%Y-%m-%d", "%d-%m-%Y"]),
 /// };
 ///
-/// // Using a keyword
-/// let yesterday = parse_date_token("yesterday", Some(opts)).unwrap();
-/// assert_eq!(yesterday, DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 16).unwrap()));
+/// // Single keyword
+/// let y = parse_date_token("yesterday", None, Some(opts.clone())).unwrap();
+/// assert_eq!(y, DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 16).unwrap()));
 ///
-/// // Using a formatted string
-/// let specific_date = parse_date_token("20-01-2025", Some(opts)).unwrap();
-/// assert_eq!(specific_date, DateFilter::Single(NaiveDate::from_ymd_opt(2025, 1, 20).unwrap()));
+/// // With start and end date
+/// let r = parse_date_token("2025-08-20", Some("2025-08-10"), Some(opts.clone())).unwrap();
+/// assert_eq!(r, DateFilter::Range(
+///     NaiveDate::from_ymd_opt(2025, 8, 20).unwrap(),
+///     NaiveDate::from_ymd_opt(2025, 8, 10).unwrap(),
+/// ));
+///
 /// ```
-pub fn parse_date_token(s: &str, options: Option<ParseOptions>) -> Option<DateFilter> {
+pub fn parse_date_token(
+    start_date: &str,
+    end_date: Option<&str>,
+    options: Option<ParseOptions>,
+) -> Option<DateFilter> {
     let options = options.unwrap_or_default();
     let reference_date = options
         .reference_date
         .unwrap_or_else(|| Local::now().date_naive());
     let formats = options.formats.unwrap_or(DEFAULT_FORMATS);
 
-    if Keywords::matches(Keyword::Today, s) {
+    let a = resolve_date_token(start_date, reference_date, &formats)?;
+    let b = end_date.and_then(|date| resolve_date_token(date, reference_date, &formats));
+
+    match (a, b) {
+        // If either side is an range, always return the range.
+        (DateFilter::Range(s_date, e_date), _) => Some(DateFilter::Range(s_date, e_date)),
+
+        (DateFilter::Single(_), Some(DateFilter::Range(s_date, e_date))) => {
+            Some(DateFilter::Range(s_date, e_date))
+        }
+
+        // Two singles
+        (DateFilter::Single(a_single_date), Some(DateFilter::Single(b_single_date))) => {
+            Some(DateFilter::Range(a_single_date, b_single_date))
+        }
+
+        // Only one single
+        (DateFilter::Single(a_single_date), None) => Some(DateFilter::Single(a_single_date)),
+    }
+}
+
+fn resolve_date_token(
+    date_string: &str,
+    reference_date: NaiveDate,
+    formats: &[&str],
+) -> Option<DateFilter> {
+    if Keywords::matches(Keyword::Today, date_string) {
         return Some(DateFilter::Single(reference_date));
     }
-    if Keywords::matches(Keyword::Yesterday, s) {
+    if Keywords::matches(Keyword::Yesterday, date_string) {
         return Some(DateFilter::Single(reference_date - Duration::days(1)));
     }
-    if Keywords::matches(Keyword::Tomorrow, s) {
+    if Keywords::matches(Keyword::Tomorrow, date_string) {
         return Some(DateFilter::Single(reference_date + Duration::days(1)));
     }
-    if Keywords::matches(Keyword::LastWeek, s) {
+    if Keywords::matches(Keyword::LastWeek, date_string) {
         let today_wd = reference_date.weekday();
         let days_to_last_sunday = today_wd.num_days_from_sunday();
         let last_sunday = reference_date - Duration::days(days_to_last_sunday as i64);
         let start_of_last_week = last_sunday - Duration::days(6);
         return Some(DateFilter::Range(start_of_last_week, last_sunday));
     }
-    if Keywords::matches(Keyword::LastMonth, s) {
+    if Keywords::matches(Keyword::LastMonth, date_string) {
         let first_of_this_month = reference_date.with_day(1).unwrap();
         let end_of_last_month = first_of_this_month - Duration::days(1);
         let start_of_last_month = end_of_last_month.with_day(1).unwrap();
         return Some(DateFilter::Range(start_of_last_month, end_of_last_month));
+    }
+
+    if Keywords::matches(Keyword::LastYear, date_string) {
+        let y = reference_date.year() - 1;
+        let start = NaiveDate::from_ymd_opt(y, 1, 1)?;
+        let end = NaiveDate::from_ymd_opt(y, 12, 31)?;
+        return Some(DateFilter::Range(start, end));
     }
 
     let day_keyword = [
@@ -176,7 +236,7 @@ pub fn parse_date_token(s: &str, options: Option<ParseOptions>) -> Option<DateFi
         (Keyword::Sunday, Weekday::Sun),
     ]
     .iter()
-    .find(|(keyword, _)| Keywords::matches(*keyword, s));
+    .find(|(keyword, _)| Keywords::matches(*keyword, date_string));
 
     if let Some((_, weekday)) = day_keyword {
         let today_wd = reference_date.weekday();
@@ -189,7 +249,7 @@ pub fn parse_date_token(s: &str, options: Option<ParseOptions>) -> Option<DateFi
     // Fallback to formatted dates
     formats
         .iter()
-        .filter_map(|fmt| NaiveDate::parse_from_str(s, fmt).ok())
+        .filter_map(|fmt| NaiveDate::parse_from_str(date_string, fmt).ok())
         .map(|d| DateFilter::Single(d))
         .next()
 }
@@ -329,7 +389,7 @@ fn parse_prefix<'a>(
                     reference_date: Some(reference_date),
                     formats: Some(formats),
                 };
-                if let Some(date) = parse_date_token(date_part, Some(opts)) {
+                if let Some(date) = parse_date_token(date_part, None, Some(opts)) {
                     let time = parse_time_token(time_part);
                     return (Some(date), time, rest);
                 }
@@ -340,7 +400,7 @@ fn parse_prefix<'a>(
             reference_date: Some(reference_date),
             formats: Some(formats),
         };
-        if let Some(date) = parse_date_token(prefix_trim, Some(opts)) {
+        if let Some(date) = parse_date_token(prefix_trim, None, Some(opts)) {
             return (Some(date), None, rest);
         }
     }
@@ -489,42 +549,42 @@ mod tests {
         let p_opts = opts(anchor);
 
         // Test parsing of each day of the week relative to the anchor
-        let monday = parse_date_token("monday", p_opts).unwrap();
+        let monday = parse_date_token("monday", None, p_opts).unwrap();
         assert_eq!(
             monday,
             DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 18).unwrap())
         );
 
-        let tuesday = parse_date_token("tuesday", p_opts).unwrap();
+        let tuesday = parse_date_token("tuesday", None, p_opts).unwrap();
         assert_eq!(
             tuesday,
             DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 19).unwrap())
         );
 
         // A day keyword matching the anchor date should return the anchor date
-        let wednesday = parse_date_token("wednesday", p_opts).unwrap();
+        let wednesday = parse_date_token("wednesday", None, p_opts).unwrap();
         assert_eq!(wednesday, DateFilter::Single(anchor));
 
         // Days from the "previous week" should resolve correctly
-        let thursday = parse_date_token("thursday", p_opts).unwrap();
+        let thursday = parse_date_token("thursday", None, p_opts).unwrap();
         assert_eq!(
             thursday,
             DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 14).unwrap())
         );
 
-        let friday = parse_date_token("friday", p_opts).unwrap();
+        let friday = parse_date_token("friday", None, p_opts).unwrap();
         assert_eq!(
             friday,
             DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 15).unwrap())
         );
 
-        let saturday = parse_date_token("saturday", p_opts).unwrap();
+        let saturday = parse_date_token("saturday", None, p_opts).unwrap();
         assert_eq!(
             saturday,
             DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 16).unwrap())
         );
 
-        let sunday = parse_date_token("sunday", p_opts).unwrap();
+        let sunday = parse_date_token("sunday", None, p_opts).unwrap();
         assert_eq!(
             sunday,
             DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 17).unwrap())
@@ -619,7 +679,7 @@ mod tests {
         let p_opts = opts(anchor);
 
         // Last Week
-        let last_week = parse_date_token("last week", p_opts).unwrap();
+        let last_week = parse_date_token("last week", None, p_opts).unwrap();
         assert_eq!(
             last_week,
             DateFilter::Range(
@@ -628,13 +688,88 @@ mod tests {
             )
         );
 
-        // Last Month
-        let last_month = parse_date_token("last month", p_opts).unwrap();
+        let last_month = parse_date_token("last month", None, p_opts).unwrap();
         assert_eq!(
             last_month,
             DateFilter::Range(
                 NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2025, 7, 31).unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn start_range_ignores_end_single() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 20).unwrap();
+        let p_opts = opts(anchor);
+
+        let res = parse_date_token("last week", Some("2025-08-01"), p_opts).unwrap();
+        assert_eq!(
+            res,
+            DateFilter::Range(
+                NaiveDate::from_ymd_opt(2025, 8, 11).unwrap(), // Mon
+                NaiveDate::from_ymd_opt(2025, 8, 17).unwrap(), // Sun
+            )
+        );
+    }
+
+    #[test]
+    fn start_range_ignores_end_range() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 20).unwrap();
+        let p_opts = opts(anchor);
+
+        let res = parse_date_token("last month", Some("last week"), p_opts).unwrap();
+        assert_eq!(
+            res,
+            DateFilter::Range(
+                NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2025, 7, 31).unwrap(),
+            )
+        );
+    }
+
+    #[test]
+    fn two_singles_preserve_user_order_even_when_fucked_up() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 20).unwrap();
+        let p_opts = opts(anchor);
+
+        let res = parse_date_token("20/08/2025", Some("10/08/2025"), p_opts).unwrap();
+        assert_eq!(
+            res,
+            DateFilter::Range(
+                NaiveDate::from_ymd_opt(2025, 8, 20).unwrap(),
+                NaiveDate::from_ymd_opt(2025, 8, 10).unwrap(),
+            )
+        );
+    }
+
+    #[test]
+    fn weekday_plus_single_end_becomes_range_preserving_order() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 20).unwrap(); // Wed
+        let end_date = Some("19/08/2025");
+        let p_opts = opts(anchor);
+
+        let res = parse_date_token("monday", end_date, p_opts).unwrap();
+        assert_eq!(
+            res,
+            DateFilter::Range(
+                NaiveDate::from_ymd_opt(2025, 8, 18).unwrap(),
+                NaiveDate::from_ymd_opt(2025, 8, 19).unwrap(),
+            )
+        );
+    }
+
+    #[test]
+    fn start_single_end_is_range_returns_that_range() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 20).unwrap();
+        let p_opts = opts(anchor);
+
+        let res = parse_date_token("10/08/2025", Some("last week"), p_opts).unwrap();
+        assert_eq!(
+            res,
+            DateFilter::Range(
+                NaiveDate::from_ymd_opt(2025, 8, 11).unwrap(),
+                NaiveDate::from_ymd_opt(2025, 8, 17).unwrap(),
             )
         );
     }

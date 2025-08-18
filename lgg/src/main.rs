@@ -1,6 +1,10 @@
 use anyhow::Result;
 use clap::Parser;
-use lgg_core::{EntryRef, Journal, journal::QueryError, render::format_date};
+use lgg_core::{
+    EntryRef, Journal,
+    journal::{QueryError, QueryResult},
+    render::format_date,
+};
 use std::{
     fs,
     process::{Command, ExitCode},
@@ -11,16 +15,16 @@ use std::{
 #[command(version, about)]
 struct Cli {
     /// Prints the journal root directory
-    #[arg(long, short)]
+    #[arg(long, short, exclusive = true)]
     path: bool,
     /// View entries on a specific date (e.g., `lgg --on yesterday`, `lgg --on 14/08/25`)
-    #[arg(long)]
+    #[arg(long, conflicts_with_all=["from", "to"])]
     on: Option<String>,
     /// View entries from, or on, this date (e.g., `lgg --from yesterday`, `lgg --from 14/08/25`)
-    #[arg(long)]
+    #[arg(long, conflicts_with = "on")]
     from: Option<String>,
     /// View entries on a specific date (e.g., `yesterday`, `2025-08-15`)
-    #[arg(long)]
+    #[arg(long, conflicts_with = "on", requires = "from")]
     to: Option<String>,
     /// Opens your $EDITOR with a found day file. Only works on single day searches.
     /// eg. `lgg --edit yesterday`
@@ -30,6 +34,7 @@ struct Cli {
     #[arg(long, short)]
     short: bool,
     /// Free text for insert mode (e.g., `lgg yesterday: Title. Body`).
+    #[arg(exclusive = true)]
     text: Vec<String>,
 }
 
@@ -55,39 +60,42 @@ fn run() -> Result<()> {
     // Read mode
     if let Some(date_str) = cli.on {
         println!("Filtering on: {}", date_str);
-        let result = journal.read_entries(&date_str, None);
-        if result.entries.is_empty() {
-            println!("No entries found for {}.", date_str);
-        } else {
-            for entry in result.entries {
-                println!(
-                    "{} {}: {}",
-                    format_date(entry.date, &journal.config.journal_date_format),
-                    entry.time.format("%H:%M"),
-                    entry.title
-                );
-                if !entry.body.is_empty() && !cli.short {
-                    println!("  {}", entry.body.replace('\n', "\n"));
-                }
-            }
-        }
-        if !result.errors.is_empty() {
-            eprintln!("\nWarnings:");
-            for error in result.errors {
-                match error {
-                    QueryError::FileError { path, error } => {
-                        eprintln!("- Could not process '{}': {}", path.display(), error);
-                    }
-                    QueryError::InvalidDate { input, error } => {
-                        eprintln!("- Could not process '{}': {}", input, error);
-                    }
-                }
-            }
-        }
-        // TODO: Implement reading logic
+        let result = journal.read_entries(&date_str, None, None);
+        print_entries(
+            result,
+            &date_str,
+            &journal.config.journal_date_format,
+            cli.short,
+        );
         return Ok(());
     }
 
+    match (cli.from.as_deref(), cli.to.as_deref()) {
+        (Some(from), Some(to)) => {
+            let result = journal.read_entries(&from, Some(&to), None);
+            print_entries(
+                result,
+                &from,
+                &journal.config.journal_date_format,
+                cli.short,
+            );
+            return Ok(());
+        }
+        (Some(from), None) => {
+            let result = journal.read_entries(&from, Some(&"today"), None);
+            print_entries(
+                result,
+                &from,
+                &journal.config.journal_date_format,
+                cli.short,
+            );
+            return Ok(());
+        }
+        (None, Some(_)) => {} // We can't have a 'to' without 'from'
+        (None, None) => {}
+    }
+
+    // Edit mode
     if let Some(date_str) = cli.edit {
         println!("Filtering on: {}", date_str);
         // TODO: We need to implement .find_entry in journal. Returns a path to specified date's file.
@@ -119,6 +127,37 @@ fn run() -> Result<()> {
     );
 
     Ok(())
+}
+
+fn print_entries(result: QueryResult, date_str: &str, date_format: &String, short_mode: bool) {
+    if result.entries.is_empty() {
+        println!("No entries found for {}.", date_str);
+    } else {
+        for entry in result.entries {
+            println!(
+                "{} {}: {}",
+                format_date(entry.date, date_format),
+                entry.time.format("%H:%M"),
+                entry.title
+            );
+            if !entry.body.is_empty() && !short_mode {
+                println!("  {}", entry.body.replace('\n', "\n"));
+            }
+        }
+    }
+    if !result.errors.is_empty() {
+        eprintln!("\nWarnings:");
+        for error in result.errors {
+            match error {
+                QueryError::FileError { path, error } => {
+                    eprintln!("- Could not process '{}': {}", path.display(), error);
+                }
+                QueryError::InvalidDate { input, error } => {
+                    eprintln!("- Could not process '{}': {}", input, error);
+                }
+            }
+        }
+    }
 }
 
 fn resolve_editor(j: &Journal) -> Result<String> {

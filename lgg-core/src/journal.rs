@@ -79,8 +79,12 @@ impl Journal {
     /// * `reference_date` - Optional argument that will allow to modify the date of reference for
     /// relatives dates (yesterday, tomorrow...)
     pub fn create_entry(&self, input: &str, reference_date: Option<NaiveDate>) -> Result<EntryRef> {
-        let format_strs: Vec<&str> =
-            self.config.input_date_formats.iter().map(AsRef::as_ref).collect();
+        let format_strs: Vec<&str> = self
+            .config
+            .input_date_formats
+            .iter()
+            .map(AsRef::as_ref)
+            .collect();
         let opts = ParseOptions {
             reference_date,
             formats: Some(&format_strs),
@@ -139,17 +143,26 @@ impl Journal {
     /// * `date_str` - A string that can be parsed into a date (e.g., "yesterday", "2025-08-15").
     /// * `reference_date` - Optional argument that will allow to modify the date of reference for
     /// relatives dates (yesterday, tomorrow...)
-    pub fn read_entries(&self, date_str: &str, reference_date: Option<NaiveDate>) -> QueryResult {
+    pub fn read_entries(
+        &self,
+        start_date: &str,
+        end_date: Option<&str>,
+        reference_date: Option<NaiveDate>,
+    ) -> QueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
-        let format_strs: Vec<&str> =
-            self.config.input_date_formats.iter().map(AsRef::as_ref).collect();
+        let format_strs: Vec<&str> = self
+            .config
+            .input_date_formats
+            .iter()
+            .map(AsRef::as_ref)
+            .collect();
         let opts = ParseOptions {
             reference_date,
             formats: Some(&format_strs),
         };
 
-        if let Some(date) = parse_date_token(date_str, Some(opts)) {
+        if let Some(date) = parse_date_token(start_date, end_date, Some(opts)) {
             match date {
                 Single(s_date) => {
                     let result = self.read_single_date_entry(s_date);
@@ -164,7 +177,7 @@ impl Journal {
             }
         } else {
             errors.push(QueryError::InvalidDate {
-                input: date_str.to_string(),
+                input: start_date.to_string(),
                 error: "Not a valid date or keyword.".to_string(),
             });
         }
@@ -265,7 +278,7 @@ mod tests {
         let _ = j.create_entry("today: First entry.", None).unwrap();
         let _ = j.create_entry("today: Second entry.", None).unwrap();
 
-        let result = j.read_entries("today", None);
+        let result = j.read_entries("today", None, None);
         assert!(result.errors.is_empty());
         assert_eq!(result.entries.len(), 2);
         assert_eq!(result.entries[0].title, "First entry");
@@ -293,7 +306,7 @@ mod tests {
             .create_entry("2025/08/11: Next week", Some(anchor))
             .unwrap();
 
-        let result = j.read_entries("last week", Some(anchor));
+        let result = j.read_entries("last week", None, Some(anchor));
         assert!(result.errors.is_empty());
         assert_eq!(result.entries.len(), 2);
         assert_eq!(result.entries[0].title, "First entry");
@@ -303,7 +316,7 @@ mod tests {
     #[test]
     fn read_entries_on_date_with_no_file() {
         let (j, _tmp) = mk_journal_with_default();
-        let result = j.read_entries("yesterday", None);
+        let result = j.read_entries("yesterday", None, None);
         assert!(result.errors.is_empty());
         assert!(result.entries.is_empty());
     }
@@ -311,7 +324,7 @@ mod tests {
     #[test]
     fn read_entries_with_invalid_date_string() {
         let (j, _tmp) = mk_journal_with_default();
-        let result = j.read_entries("not-a-date", None);
+        let result = j.read_entries("not-a-date", None, None);
         assert!(result.entries.is_empty());
         assert_eq!(result.errors.len(), 1);
         assert!(matches!(&result.errors[0], QueryError::InvalidDate { .. }));
@@ -325,7 +338,7 @@ mod tests {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, "this file is not valid").unwrap();
 
-        let result = j.read_entries("today", None);
+        let result = j.read_entries("today", None, None);
         assert!(result.entries.is_empty());
         assert_eq!(result.errors.len(), 1);
         assert!(matches!(&result.errors[0], QueryError::FileError { .. }));
