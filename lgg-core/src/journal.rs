@@ -3,6 +3,7 @@
 use crate::config::Config;
 use crate::entry::Entry;
 use crate::parse_entries::parse_day_file;
+use crate::parse_input::DateFilter::{Range, Single};
 use crate::parse_input::{parse_date_token, parse_entry};
 use crate::paths::day_path;
 use crate::render::{format_day_header, format_entry_block};
@@ -70,7 +71,7 @@ impl Journal {
     /// - Creates or appends to the daily file (`{root}/YYYY/MM/YYYY-MM-DD.md`).
     ///
     /// Returns an [`EntryRef`] with metadata about the saved entry.
-    pub fn save_entry(&self, input: &str) -> Result<EntryRef> {
+    pub fn create_entry(&self, input: &str) -> Result<EntryRef> {
         let parsed = parse_entry(input, None);
         let date = parsed.date;
         let time = if let Some(t) = parsed.time {
@@ -128,7 +129,16 @@ impl Journal {
         let mut warnings = Vec::new();
 
         if let Some(date) = parse_date_token(date_str, None) {
-            let path = day_path(&self.config.journal_dir, date);
+            let start_date;
+            match date {
+                Single(s_date) => {
+                    start_date = s_date;
+                }
+                Range(s_date, e_date) => {
+                    start_date = s_date;
+                }
+            }
+            let path = day_path(&self.config.journal_dir, start_date);
             if path.exists() {
                 match fs::read_to_string(&path) {
                     Ok(content) => match parse_day_file(&content) {
@@ -182,7 +192,7 @@ mod tests {
     #[test]
     fn save_entry_creates_day_file_and_appends() {
         let (j, _tmp) = mk_journal_with_default(None);
-        let res = j.save_entry("Test entry. With body.").unwrap();
+        let res = j.create_entry("Test entry. With body.").unwrap();
         let expected = day_path(&j.config.journal_dir, res.date);
         assert_eq!(res.path, expected);
         assert!(res.path.exists());
@@ -198,8 +208,8 @@ mod tests {
     #[test]
     fn read_entries_success() {
         let (j, _tmp) = mk_journal_with_default(None);
-        let _ = j.save_entry("today: First entry.").unwrap();
-        let _ = j.save_entry("today: Second entry.").unwrap();
+        let _ = j.create_entry("today: First entry.").unwrap();
+        let _ = j.create_entry("today: Second entry.").unwrap();
 
         let result = j.read_entries_on_date("today");
         assert!(result.errors.is_empty());

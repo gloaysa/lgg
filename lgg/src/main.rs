@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use lgg_core::{Journal, journal::QueryError, render::format_date};
+use lgg_core::{EntryRef, Journal, journal::QueryError, render::format_date};
 use std::{
     fs,
     process::{Command, ExitCode},
@@ -80,16 +80,10 @@ fn run() -> Result<()> {
     }
 
     // Insert mode (default)
+    let new_entry: EntryRef;
     if !cli.text.is_empty() {
         let inline = cli.text.join(" ");
-        let saved = journal.save_entry(&inline)?;
-        println!(
-            "Saved: {} {} - {} -> {}",
-            saved.date,
-            saved.time.format("%H:%M"),
-            saved.title,
-            saved.path.display()
-        );
+        new_entry = journal.create_entry(&inline)?;
     } else {
         let editor = resolve_editor(&journal)?;
         let input = edit_and_read(&editor)?;
@@ -98,15 +92,16 @@ fn run() -> Result<()> {
             println!("No entry to save, because no text was received.");
             return Ok(());
         }
-        let saved = journal.save_entry(&trimmed)?;
-        println!(
-            "Saved: {} {} - {} -> {}",
-            saved.date,
-            saved.time.format("%H:%M"),
-            saved.title,
-            saved.path.display()
-        );
+        new_entry = journal.create_entry(&trimmed)?;
     }
+    println!(
+        "Saved: {} {} - {} -> {}",
+        format_date(new_entry.date, &journal.config),
+        new_entry.time.format("%H:%M"),
+        new_entry.title,
+        new_entry.path.display()
+    );
+
     Ok(())
 }
 
