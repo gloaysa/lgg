@@ -46,7 +46,7 @@ fn run() -> Result<()> {
     // Reading/Filtering mode
     if let Some(date_str) = cli.on {
         println!("Filtering on: {}", date_str);
-        let result = journal.read_entries_on_date(&date_str);
+        let result = journal.read_entries(&date_str, None);
         if result.entries.is_empty() {
             println!("No entries found for {}.", date_str);
         } else {
@@ -83,7 +83,7 @@ fn run() -> Result<()> {
     let new_entry: EntryRef;
     if !cli.text.is_empty() {
         let inline = cli.text.join(" ");
-        new_entry = journal.create_entry(&inline)?;
+        new_entry = journal.create_entry(&inline, None)?;
     } else {
         let editor = resolve_editor(&journal)?;
         let input = edit_and_read(&editor)?;
@@ -92,7 +92,7 @@ fn run() -> Result<()> {
             println!("No entry to save, because no text was received.");
             return Ok(());
         }
-        new_entry = journal.create_entry(&trimmed)?;
+        new_entry = journal.create_entry(&trimmed, None)?;
     }
     println!(
         "Saved: {} {} - {} -> {}",
