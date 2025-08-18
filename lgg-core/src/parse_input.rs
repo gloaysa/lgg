@@ -3,7 +3,7 @@ use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Wee
 use crate::keywords::{Keyword, Keywords};
 
 /// Default accepted input date formats (parsing only).
-const DEFAULT_FORMATS: &[&str] = &["%Y-%m-%d", "%Y%m%d"];
+const DEFAULT_FORMATS: &[&str] = &["%d/%m/%Y"];
 
 /// The result of parsing a date string, which can be a single day or a range.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -125,7 +125,7 @@ pub fn parse_entry(input: &str, options: Option<ParseOptions>) -> ParsedInline {
 /// # use lgg_core::parse_input::{parse_date_token, ParseOptions, DateFilter};
 /// let opts = ParseOptions {
 ///     reference_date: Some(NaiveDate::from_ymd_opt(2025, 8, 17).unwrap()),
-///     formats: Some(&["%Y-%m-%d"]),
+///     formats: Some(&["%d-%m-%Y"]),
 /// };
 ///
 /// // Using a keyword
@@ -133,7 +133,7 @@ pub fn parse_entry(input: &str, options: Option<ParseOptions>) -> ParsedInline {
 /// assert_eq!(yesterday, DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 16).unwrap()));
 ///
 /// // Using a formatted string
-/// let specific_date = parse_date_token("2025-01-20", Some(opts)).unwrap();
+/// let specific_date = parse_date_token("20-01-2025", Some(opts)).unwrap();
 /// assert_eq!(specific_date, DateFilter::Single(NaiveDate::from_ymd_opt(2025, 1, 20).unwrap()));
 /// ```
 pub fn parse_date_token(s: &str, options: Option<ParseOptions>) -> Option<DateFilter> {
@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn iso_date_prefix() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
-        let p = parse_entry("2025-08-01: Title. Body", opts(anchor));
+        let p = parse_entry("01/08/2025: Title. Body", opts(anchor));
         assert_eq!(p.date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
         assert!(p.time.is_none());
         assert_eq!(p.title, "Title");
@@ -455,7 +455,7 @@ mod tests {
     #[test]
     fn custom_format_dd_mm_yyyy() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
-        let fmts = &["%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y"];
+        let fmts = &["%d-%m-%Y", "%d/%m/%Y"];
         let custom_opts = Some(ParseOptions {
             reference_date: Some(anchor),
             formats: Some(fmts),

@@ -136,8 +136,13 @@ default_time = "21:00"
 # The format string used for the date in the header of daily files.
 # Uses chrono's strftime format specifiers.
 # See: https://docs.rs/chrono/latest/chrono/format/strftime/
-date_format = "%A, %d %b %Y" # e.g., "Friday, 15 Aug 2025"
+journal_date_format = "%A, %d %b %Y" # e.g., "Friday, 15 Aug 2025"
 
+# The different formats you want to use for the date
+# when creating new entries or searching for them.
+# Uses chrono's strftime format specifiers.
+# See: https://docs.rs/chrono/latest/chrono/format/strftime/
+input_date_formats = ["%d/%m/%Y", "%d%m%Y"]
 # A table of custom synonyms for date keywords.
 # The key is your alias, and the value must be a built-in keyword
 # (today, yesterday, tomorrow, noon, midnight...).

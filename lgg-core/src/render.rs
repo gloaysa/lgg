@@ -8,11 +8,9 @@
 
 use chrono::{Local, NaiveDate, NaiveTime};
 
-use crate::Config;
-
 /// `# Friday, 15 Aug 2025`
-pub fn format_day_header(date: NaiveDate, config: &Config) -> String {
-    format!("# {}", format_date(date, config))
+pub fn format_day_header(date: NaiveDate, date_format: &String) -> String {
+    format!("# {}", format_date(date, date_format))
 }
 
 /// Render an entry block.
@@ -28,23 +26,19 @@ pub fn format_entry_block(title: &str, body: &str, time: Option<NaiveTime>) -> S
 }
 
 /// Formats a date according to the user's configuration.
-pub fn format_date(date: NaiveDate, config: &Config) -> String {
-    date.format(&config.date_format).to_string()
+pub fn format_date(date: NaiveDate, date_format: &String) -> String {
+    date.format(&date_format).to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::tests::mk_config;
     use chrono::{NaiveDate, NaiveTime};
-    use tempfile::tempdir;
 
     #[test]
     fn header_formats_readably() {
-        let tmp = tempdir().unwrap();
-        let cfg = mk_config(tmp.path().to_path_buf());
         let d = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap(); // Friday
-        let s = format_day_header(d, &cfg);
+        let s = format_day_header(d, &"%A, %d %b %Y".to_string());
         assert!(s.starts_with("# Fri") || s.starts_with("# Friday"));
         assert!(s.contains("15 Aug 2025"));
     }
@@ -64,4 +58,3 @@ mod tests {
         assert_eq!(s, "## 07:05 - Title only\n\n");
     }
 }
-

@@ -75,13 +75,15 @@ impl Journal {
     ///
     /// # Arguments
     ///
-    /// * `input` - an string with the user's input (eg 'yesterday: I did some coding.').
+    /// * `input` - a string with the user's input (eg 'yesterday: I did some coding.').
     /// * `reference_date` - Optional argument that will allow to modify the date of reference for
     /// relatives dates (yesterday, tomorrow...)
     pub fn create_entry(&self, input: &str, reference_date: Option<NaiveDate>) -> Result<EntryRef> {
+        let format_strs: Vec<&str> =
+            self.config.input_date_formats.iter().map(AsRef::as_ref).collect();
         let opts = ParseOptions {
             reference_date,
-            ..Default::default()
+            formats: Some(&format_strs),
         };
         let parsed = parse_entry(input, Some(opts));
         let date = parsed.date;
@@ -107,7 +109,7 @@ impl Journal {
             .with_context(|| format!("opening {}", path.display()))?;
 
         if is_new {
-            let header = format_day_header(date, &self.config);
+            let header = format_day_header(date, &self.config.journal_date_format);
             writeln!(f, "{header}\n")
                 .with_context(|| format!("writing day header to {}", path.display()))?;
         } else {
@@ -140,9 +142,11 @@ impl Journal {
     pub fn read_entries(&self, date_str: &str, reference_date: Option<NaiveDate>) -> QueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
+        let format_strs: Vec<&str> =
+            self.config.input_date_formats.iter().map(AsRef::as_ref).collect();
         let opts = ParseOptions {
             reference_date,
-            ..Default::default()
+            formats: Some(&format_strs),
         };
 
         if let Some(date) = parse_date_token(date_str, Some(opts)) {

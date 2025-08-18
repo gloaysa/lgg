@@ -15,15 +15,17 @@ pub struct Config {
     /// Entries will be created at this time if you supply a date but not specific time (e.g. `yesterday:`).
     /// Valid format is "%H:%M" (e.g. 08:40 or 16:33). Default is 21:00.
     pub default_time: NaiveTime,
-    pub date_format: String,
+    pub journal_date_format: String,
+    pub input_date_formats: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
-struct FileConfig {
+struct ConfigFile {
     journal_dir: Option<PathBuf>,
     editor: Option<String>,
     default_time: Option<String>,
-    pub date_format: Option<String>,
+    journal_date_format: Option<String>,
+    input_date_formats: Option<Vec<String>>,
     /// Optional table:
     /// [synonyms]
     /// ytd = "yesterday"
@@ -35,12 +37,13 @@ impl Config {
     /// Public entrypoint: load config from disk (first XDG path, then native), apply defaults,
     /// and extend the global Keywords registry with user-defined synonyms if present.
     pub fn load() -> Result<Self> {
-        let file_config = Self::read_file_config().unwrap_or_else(|_| FileConfig {
+        let file_config = Self::read_file_config().unwrap_or_else(|_| ConfigFile {
             journal_dir: None,
             editor: None,
             default_time: None,
             synonyms: None,
-            date_format: None,
+            journal_date_format: None,
+            input_date_formats: None,
         });
 
         let default_time = file_config
@@ -50,12 +53,16 @@ impl Config {
             .unwrap_or_else(Self::default_fallback_time);
 
         let date_format = file_config
-            .date_format
+            .journal_date_format
             .unwrap_or_else(|| "%A, %d %b %Y".to_string());
 
         let journal_dir = file_config
             .journal_dir
             .unwrap_or_else(Self::default_journal_dir);
+
+        let input_date_formats = file_config
+            .input_date_formats
+            .unwrap_or_else(|| ["%d/%m/%Y".to_string()].to_vec());
 
         // Extend global keyword registry once at startup.
         Self::load_synonyms(&file_config.synonyms);
@@ -64,7 +71,8 @@ impl Config {
             journal_dir,
             editor: file_config.editor,
             default_time,
-            date_format,
+            journal_date_format: date_format,
+            input_date_formats,
         })
     }
 
@@ -104,7 +112,7 @@ impl Config {
     }
 
     /// Read the first existing config file and parse it.
-    fn read_file_config() -> Result<FileConfig> {
+    fn read_file_config() -> Result<ConfigFile> {
         for path in Self::config_file_paths() {
             if !path.exists() {
                 continue;
@@ -113,18 +121,19 @@ impl Config {
                 fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
             return Self::parse_file(&s).with_context(|| format!("parsing {}", path.display()));
         }
-        Ok(FileConfig {
+        Ok(ConfigFile {
             journal_dir: None,
             editor: None,
             default_time: None,
             synonyms: None,
-            date_format: None,
+            journal_date_format: None,
+            input_date_formats: None,
         })
     }
 
     /// Parse a TOML string into `FileConfig`.
-    fn parse_file(s: &str) -> Result<FileConfig> {
-        Ok(toml::from_str::<FileConfig>(s)?)
+    fn parse_file(s: &str) -> Result<ConfigFile> {
+        Ok(toml::from_str::<ConfigFile>(s)?)
     }
 
     /// Merge `[synonyms]` into the global Keywords registry.
@@ -166,7 +175,8 @@ pub mod tests {
             journal_dir,
             editor: None,
             default_time: NaiveTime::from_hms_opt(21, 0, 0).expect("valid time"),
-            date_format: "%A, %d %b %Y".to_string(),
+            journal_date_format: "%A, %d %b %Y".to_string(),
+            input_date_formats: ["%d/%m/%Y".to_string()].to_vec(),
         }
     }
 

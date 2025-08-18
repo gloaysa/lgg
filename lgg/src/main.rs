@@ -11,16 +11,25 @@ use std::{
 #[command(version, about)]
 struct Cli {
     /// Prints the journal root directory
-    #[arg(long, short = 'p')]
+    #[arg(long, short)]
     path: bool,
-
-    /// View entries on a specific date (e.g., `yesterday`, `2025-08-15`)
+    /// View entries on a specific date (e.g., `lgg --on yesterday`, `lgg --on 14/08/25`)
     #[arg(long)]
     on: Option<String>,
-
-    /// Free text for insert mode (e.g., `yesterday: Title. Body`)
-    ///
-    /// If provided and no subcommand is used, we treat this as an inline entry.
+    /// View entries from, or on, this date (e.g., `lgg --from yesterday`, `lgg --from 14/08/25`)
+    #[arg(long)]
+    from: Option<String>,
+    /// View entries on a specific date (e.g., `yesterday`, `2025-08-15`)
+    #[arg(long)]
+    to: Option<String>,
+    /// Opens your $EDITOR with a found day file. Only works on single day searches.
+    /// eg. `lgg --edit yesterday`
+    #[arg(long, short)]
+    edit: Option<String>,
+    /// Only shows the date and titles of searched entries.
+    #[arg(long, short)]
+    short: bool,
+    /// Free text for insert mode (e.g., `lgg yesterday: Title. Body`).
     text: Vec<String>,
 }
 
@@ -43,7 +52,7 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    // Reading/Filtering mode
+    // Read mode
     if let Some(date_str) = cli.on {
         println!("Filtering on: {}", date_str);
         let result = journal.read_entries(&date_str, None);
@@ -53,11 +62,11 @@ fn run() -> Result<()> {
             for entry in result.entries {
                 println!(
                     "{} {}: {}",
-                    format_date(entry.date, &journal.config),
+                    format_date(entry.date, &journal.config.journal_date_format),
                     entry.time.format("%H:%M"),
                     entry.title
                 );
-                if !entry.body.is_empty() {
+                if !entry.body.is_empty() && !cli.short {
                     println!("  {}", entry.body.replace('\n', "\n"));
                 }
             }
@@ -79,6 +88,13 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
+    if let Some(date_str) = cli.edit {
+        println!("Filtering on: {}", date_str);
+        // TODO: We need to implement .find_entry in journal. Returns a path to specified date's file.
+        println!("Coming soon, editing single files!");
+        return Ok(());
+    }
+
     // Insert mode (default)
     let new_entry: EntryRef;
     if !cli.text.is_empty() {
@@ -86,7 +102,7 @@ fn run() -> Result<()> {
         new_entry = journal.create_entry(&inline, None)?;
     } else {
         let editor = resolve_editor(&journal)?;
-        let input = edit_and_read(&editor)?;
+        let input = create_editor_buffer(&editor)?;
         let trimmed = input.trim();
         if trimmed.is_empty() {
             println!("No entry to save, because no text was received.");
@@ -96,7 +112,7 @@ fn run() -> Result<()> {
     }
     println!(
         "Saved: {} {} - {} -> {}",
-        format_date(new_entry.date, &journal.config),
+        format_date(new_entry.date, &journal.config.journal_date_format),
         new_entry.time.format("%H:%M"),
         new_entry.title,
         new_entry.path.display()
@@ -117,7 +133,7 @@ fn resolve_editor(j: &Journal) -> Result<String> {
     Ok(editor)
 }
 
-fn edit_and_read(editor_cmd: &str) -> Result<String> {
+fn create_editor_buffer(editor_cmd: &str) -> Result<String> {
     let file = tempfile::Builder::new()
         .prefix("lgg")
         .suffix(".md")
