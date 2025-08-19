@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::RwLock;
+use regex::Regex;
 use strum::IntoEnumIterator;
 use strum_macros::{AsRefStr, EnumIter, EnumString};
 
@@ -27,6 +28,9 @@ pub enum Keyword {
     LastWeek,
     LastMonth,
     LastYear,
+    ThisWeek,
+    ThisMonth,
+    ThisYear,
 }
 
 pub struct Keywords;
@@ -73,6 +77,9 @@ impl Keywords {
             m.insert("last week".to_string(), Keyword::LastWeek);
             m.insert("last month".to_string(), Keyword::LastMonth);
             m.insert("last year".to_string(), Keyword::LastYear);
+            m.insert("this week".to_string(), Keyword::ThisWeek);
+            m.insert("this month".to_string(), Keyword::ThisMonth);
+            m.insert("this year".to_string(), Keyword::ThisYear);
 
             RwLock::new(m)
         });
@@ -136,26 +143,24 @@ impl Keywords {
 
     pub fn find_word(keyword: Keyword, input: &str) -> Option<String> {
         let lower = input.to_ascii_lowercase();
-        for (alias, target) in Self::registry().read().unwrap().iter() {
-            if target == &keyword {
-                if lower.find(alias).is_some() {
-                    return Some(alias.clone());
-                }
-            }
+        let pattern = format!(r"\b{}\b", regex::escape(keyword.as_ref()));
+        let re = Regex::new(&pattern).unwrap();
+        if re.is_match(&lower) {
+            Some(keyword.as_ref().to_string())
+        } else {
+            None
         }
-        None
     }
 
     pub fn find_position(keyword: Keyword, input: &str) -> Option<usize> {
         let lower = input.to_ascii_lowercase();
-        for (alias, target) in Self::registry().read().unwrap().iter() {
-            if target == &keyword {
-                if let Some(pos) = lower.find(alias) {
-                    return Some(pos);
-                }
-            }
+        let pattern = format!(r"\b{}\b", regex::escape(keyword.as_ref()));
+        let re = Regex::new(&pattern).unwrap();
+        if let Some(m) = re.find(&lower) {
+            Some(m.start())
+        } else {
+            None
         }
-        None
     }
 }
 
@@ -191,12 +196,27 @@ mod tests {
     }
 
     #[test]
-    fn find_searches_constant() {
-        if let Some(_) = Keywords::find_position(Keyword::Tomorrow, "text tomorrow text") {
-            assert!(true);
-        } else {
-            assert!(false);
-        }
+    fn find_word_finds_whole_word() {
+        assert_eq!(Keywords::find_word(Keyword::At, "text at text"), Some("at".to_string()));
+        assert_eq!(Keywords::find_word(Keyword::Friday, "go friday go"), Some("friday".to_string()));
+    }
+
+    #[test]
+    fn find_word_does_not_find_substring() {
+        assert_eq!(Keywords::find_word(Keyword::At, "saturday"), None);
+        assert_eq!(Keywords::find_word(Keyword::Friday, "fridaya"), None);
+    }
+
+    #[test]
+    fn find_position_finds_whole_word() {
+        assert_eq!(Keywords::find_position(Keyword::At, "text at text"), Some(5));
+        assert_eq!(Keywords::find_position(Keyword::Friday, "go friday go"), Some(3));
+    }
+
+    #[test]
+    fn find_position_does_not_find_substring() {
+        assert_eq!(Keywords::find_position(Keyword::At, "saturday"), None);
+        assert_eq!(Keywords::find_position(Keyword::Friday, "fridaya"), None);
     }
 
     #[test]
@@ -207,4 +227,5 @@ mod tests {
             assert!(true);
         }
     }
+
 }

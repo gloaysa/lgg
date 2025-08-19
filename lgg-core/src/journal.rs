@@ -294,29 +294,28 @@ mod tests {
     #[test]
     fn read_entries_range_date_success() {
         let (j, _tmp) = mk_journal_with_default();
+        println!("{}", j.config.journal_dir.as_os_str().display());
         let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // Monday
 
-        let _ = j
-            .create_entry("2025/07/27: Previous week", Some(anchor))
+        j.create_entry("27/07/2025: Previous week", Some(anchor))
             .unwrap();
-        let _ = j
-            .create_entry("saturday: First entry.", Some(anchor))
+        j.create_entry("saturday: First entry.", Some(anchor))
             .unwrap();
-        let _ = j
-            .create_entry("yesterday: Second entry.", Some(anchor))
+        j.create_entry("yesterday: Second entry.", Some(anchor))
             .unwrap();
-        let _ = j
-            .create_entry("today: Is a Monday so it does not count.", Some(anchor))
-            .unwrap();
-        let _ = j
-            .create_entry("2025/08/11: Next week", Some(anchor))
+        j.create_entry("today: This week.", Some(anchor)).unwrap();
+        j.create_entry("11/08/2025: Next week", Some(anchor))
             .unwrap();
 
-        let result = j.read_entries("last week", None, Some(anchor));
-        assert!(result.errors.is_empty());
-        assert_eq!(result.entries.len(), 2);
-        assert_eq!(result.entries[0].title, "First entry");
-        assert_eq!(result.entries[1].title, "Second entry");
+        let last_week = j.read_entries("last week", None, Some(anchor));
+        assert!(last_week.errors.is_empty());
+        assert_eq!(last_week.entries.len(), 2);
+        assert_eq!(last_week.entries[0].title, "First entry");
+        assert_eq!(last_week.entries[1].title, "Second entry");
+        let this_week = j.read_entries("this week", None, Some(anchor));
+        assert!(this_week.errors.is_empty());
+        assert_eq!(this_week.entries.len(), 1);
+        assert_eq!(this_week.entries[0].title, "This week");
     }
 
     #[test]

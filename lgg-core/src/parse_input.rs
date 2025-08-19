@@ -212,15 +212,37 @@ fn resolve_date_token(
         let start_of_last_week = last_sunday - Duration::days(6);
         return Some(DateFilter::Range(start_of_last_week, last_sunday));
     }
+    if Keywords::matches(Keyword::ThisWeek, date_string) {
+        let days_from_monday = reference_date.weekday().num_days_from_monday();
+        let start_of_week = reference_date - Duration::days(days_from_monday as i64);
+        let end_of_week = start_of_week + Duration::days(6);
+        return Some(DateFilter::Range(start_of_week, end_of_week));
+    }
     if Keywords::matches(Keyword::LastMonth, date_string) {
-        let first_of_this_month = reference_date.with_day(1).unwrap();
+        let first_of_this_month = reference_date.with_day(1)?;
         let end_of_last_month = first_of_this_month - Duration::days(1);
-        let start_of_last_month = end_of_last_month.with_day(1).unwrap();
+        let start_of_last_month = end_of_last_month.with_day(1)?;
         return Some(DateFilter::Range(start_of_last_month, end_of_last_month));
+    }
+    if Keywords::matches(Keyword::ThisMonth, date_string) {
+        let start_of_month = reference_date.with_day(1)?;
+        let (y, m) = if start_of_month.month() == 12 {
+            (start_of_month.year() + 1, 1)
+        } else {
+            (start_of_month.year(), start_of_month.month() + 1)
+        };
+        let end_of_month = NaiveDate::from_ymd_opt(y, m, 1)? - Duration::days(1);
+        return Some(DateFilter::Range(start_of_month, end_of_month));
     }
 
     if Keywords::matches(Keyword::LastYear, date_string) {
         let y = reference_date.year() - 1;
+        let start = NaiveDate::from_ymd_opt(y, 1, 1)?;
+        let end = NaiveDate::from_ymd_opt(y, 12, 31)?;
+        return Some(DateFilter::Range(start, end));
+    }
+    if Keywords::matches(Keyword::ThisYear, date_string) {
+        let y = reference_date.year();
         let start = NaiveDate::from_ymd_opt(y, 1, 1)?;
         let end = NaiveDate::from_ymd_opt(y, 12, 31)?;
         return Some(DateFilter::Range(start, end));
@@ -392,6 +414,9 @@ fn parse_prefix<'a>(
                 if let Some(date) = parse_date_token(date_part, None, Some(opts)) {
                     let time = parse_time_token(time_part);
                     return (Some(date), time, rest);
+                } else {
+                    let time = parse_time_token(time_part);
+                    return (None, time, rest);
                 }
             }
         }
@@ -491,6 +516,8 @@ mod tests {
         let p1 = parse_entry("today at 9: Note 1", opts(anchor));
         let p2 = parse_entry("today at 17: Note 2", opts(anchor));
         let p3 = parse_entry("today at 9am: Note 3", opts(anchor));
+        let p4 = parse_entry("at morning: Note 4", opts(anchor));
+        let p5 = parse_entry("today at morning: Note 5", opts(anchor));
         assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
         assert_eq!(p1.time, Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()));
         assert_eq!(p1.title, "Note 1");
@@ -500,6 +527,12 @@ mod tests {
         assert_eq!(p3.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
         assert_eq!(p3.time, Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()));
         assert_eq!(p3.title, "Note 3");
+        assert_eq!(p4.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
+        assert_eq!(p4.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
+        assert_eq!(p4.title, "Note 4");
+        assert_eq!(p5.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
+        assert_eq!(p5.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
+        assert_eq!(p5.title, "Note 5");
     }
 
     #[test]
@@ -559,127 +592,116 @@ mod tests {
         let p_opts = opts(anchor);
 
         // Test parsing of each day of the week relative to the anchor
-        let monday = parse_date_token("monday", None, p_opts).unwrap();
+        let monday = parse_entry("monday: Task A", p_opts);
         assert_eq!(
-            monday,
-            DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 18).unwrap())
+            monday.date,
+            NaiveDate::from_ymd_opt(2025, 8, 18).unwrap()
         );
 
-        let tuesday = parse_date_token("tuesday", None, p_opts).unwrap();
+        let tuesday = parse_entry("tuesday: Task B", p_opts);
         assert_eq!(
-            tuesday,
-            DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 19).unwrap())
+            tuesday.date,
+            NaiveDate::from_ymd_opt(2025, 8, 19).unwrap()
         );
 
         // A day keyword matching the anchor date should return the anchor date
-        let wednesday = parse_date_token("wednesday", None, p_opts).unwrap();
-        assert_eq!(wednesday, DateFilter::Single(anchor));
+        let wednesday = parse_entry("wednesday: Task C", p_opts);
+        assert_eq!(wednesday.date, anchor);
 
         // Days from the "previous week" should resolve correctly
-        let thursday = parse_date_token("thursday", None, p_opts).unwrap();
+        let thursday = parse_entry("thursday: Task D", p_opts);
         assert_eq!(
-            thursday,
-            DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 14).unwrap())
+            thursday.date,
+            NaiveDate::from_ymd_opt(2025, 8, 14).unwrap()
         );
 
-        let friday = parse_date_token("friday", None, p_opts).unwrap();
+        let friday = parse_entry("friday: Task E", p_opts);
         assert_eq!(
-            friday,
-            DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 15).unwrap())
+            friday.date,
+            NaiveDate::from_ymd_opt(2025, 8, 15).unwrap()
         );
 
-        let saturday = parse_date_token("saturday", None, p_opts).unwrap();
+        let saturday = parse_entry("saturday: Task F", p_opts);
         assert_eq!(
-            saturday,
-            DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 16).unwrap())
+            saturday.date,
+            NaiveDate::from_ymd_opt(2025, 8, 16).unwrap()
         );
 
-        let sunday = parse_date_token("sunday", None, p_opts).unwrap();
+        let sunday = parse_entry("sunday: Task G", p_opts);
         assert_eq!(
-            sunday,
-            DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 17).unwrap())
+            sunday.date,
+            NaiveDate::from_ymd_opt(2025, 8, 17).unwrap()
         );
     }
 
     #[test]
     fn time_token_parsing() {
-        assert_eq!(
-            parse_time_token("morning"),
-            Some(NaiveTime::from_hms_opt(08, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("noon"),
-            Some(NaiveTime::from_hms_opt(12, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("evening"),
-            Some(NaiveTime::from_hms_opt(18, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("night"),
-            Some(NaiveTime::from_hms_opt(21, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("midnight"),
-            Some(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
-        );
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 20).unwrap();
+        let p_opts = opts(anchor);
+
+        let p = parse_entry("at morning: Title", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
+
+        let p = parse_entry("today at morning: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
+
+        let p = parse_entry("tuesday at noon: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(12, 0, 0).unwrap()));
+
+        let p = parse_entry("wednesday at evening: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(18, 0, 0).unwrap()));
+
+        let p = parse_entry("thursday at night: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(21, 0, 0).unwrap()));
+
+        let p = parse_entry("friday at midnight: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(0, 0, 0).unwrap()));
 
         // 12-hour format
-        assert_eq!(
-            parse_time_token("5am"),
-            Some(NaiveTime::from_hms_opt(5, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("5pm"),
-            Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("5:30am"),
-            Some(NaiveTime::from_hms_opt(5, 30, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("5:30 pm"),
-            Some(NaiveTime::from_hms_opt(17, 30, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("12am"),
-            Some(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("12pm"),
-            Some(NaiveTime::from_hms_opt(12, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("5PM"),
-            Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("12:45AM"),
-            Some(NaiveTime::from_hms_opt(0, 45, 0).unwrap())
-        );
+        let p = parse_entry("11/04/2025 at 5am: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(5, 0, 0).unwrap()));
+
+        let p = parse_entry("at 5pm: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()));
+
+        let p = parse_entry("at 5:30am: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(5, 30, 0).unwrap()));
+
+        let p = parse_entry("at 5:30 pm: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(17, 30, 0).unwrap()));
+
+        let p = parse_entry("at 12am: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(0, 0, 0).unwrap()));
+
+        let p = parse_entry("at 12pm: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(12, 0, 0).unwrap()));
+
+        let p = parse_entry("at 5PM: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()));
+
+        let p = parse_entry("at 12:45AM: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(0, 45, 0).unwrap()));
 
         // 24-hour format
-        assert_eq!(
-            parse_time_token("08:00"),
-            Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("23:59"),
-            Some(NaiveTime::from_hms_opt(23, 59, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("8"),
-            Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap())
-        );
-        assert_eq!(
-            parse_time_token("17"),
-            Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap())
-        );
+        let p = parse_entry("at 08:00: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
+
+        let p = parse_entry("at 23:59: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(23, 59, 0).unwrap()));
+
+        let p = parse_entry("at 8: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
+
+        let p = parse_entry("at 17: Title A", p_opts);
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()));
 
         // Invalid
-        assert!(parse_time_token("25:00").is_none());
-        assert!(parse_time_token("13:00pm").is_none());
-        assert!(parse_time_token("not-a-time").is_none());
+        let p = parse_entry("at 25:00: Title A", p_opts);
+        assert!(p.time.is_none());
+        let p = parse_entry("at 13:00pm: Title A", p_opts);
+        assert!(p.time.is_none());
+        let p = parse_entry("at not-a-time: Title A", p_opts);
+        assert!(p.time.is_none());
     }
 
     #[test]
@@ -704,6 +726,39 @@ mod tests {
             DateFilter::Range(
                 NaiveDate::from_ymd_opt(2025, 7, 1).unwrap(),
                 NaiveDate::from_ymd_opt(2025, 7, 31).unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn natural_this_date_ranges() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 20).unwrap(); // Wed
+        let p_opts = opts(anchor);
+
+        let this_week = parse_date_token("this week", None, p_opts).unwrap();
+        assert_eq!(
+            this_week,
+            DateFilter::Range(
+                NaiveDate::from_ymd_opt(2025, 8, 18).unwrap(), // Monday
+                NaiveDate::from_ymd_opt(2025, 8, 24).unwrap()  // Sunday
+            )
+        );
+
+        let this_month = parse_date_token("this month", None, p_opts).unwrap();
+        assert_eq!(
+            this_month,
+            DateFilter::Range(
+                NaiveDate::from_ymd_opt(2025, 8, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2025, 8, 31).unwrap()
+            )
+        );
+
+        let this_year = parse_date_token("this year", None, p_opts).unwrap();
+        assert_eq!(
+            this_year,
+            DateFilter::Range(
+                NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2025, 12, 31).unwrap()
             )
         );
     }
