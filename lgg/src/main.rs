@@ -1,13 +1,13 @@
-mod renderer;
+mod render;
 
 use anyhow::Result;
 use clap::Parser;
 use lgg_core::{
     EntryRef, Journal,
     journal::{QueryError, QueryResult},
-    render::format_date,
 };
-use renderer::Renderer;
+use render::{ColorMode, RenderOptions, Renderer};
+use std::io::{self, IsTerminal};
 use std::{
     fs,
     process::{Command, ExitCode},
@@ -36,6 +36,10 @@ struct Cli {
     /// Only shows the date and titles of searched entries.
     #[arg(long, short)]
     short: bool,
+    /// Control ANSI colors in output.
+    /// By default, colors are disabled when output is redirected (e.g with `>` or `|`).
+    #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
+    color: ColorMode,
     /// Free text for insert mode (e.g., `lgg yesterday: Title. Body`).
     #[arg(exclusive = true)]
     text: Vec<String>,
@@ -55,27 +59,44 @@ fn run() -> Result<()> {
     let cli = Cli::parse();
     let journal = Journal::new()?;
 
+    let use_color = match cli.color {
+        ColorMode::Always => true,
+        ColorMode::Never => false,
+        ColorMode::Auto => {
+            if std::env::var_os("NO_COLOR").is_some() {
+                false
+            } else {
+                io::stdout().is_terminal()
+            }
+        }
+    };
+    let renderer = Renderer::new(Some(RenderOptions {
+        date_format: journal.config.journal_date_format.to_string(),
+        use_color,
+        short_mode: cli.short,
+    }));
+
     if cli.path {
-        println!("{}", journal.config.journal_dir.display());
+        renderer.print_info(&format!("{}", journal.config.journal_dir.display()));
         return Ok(());
     }
 
     // Read mode
     if let Some(date_str) = cli.on {
         let result = journal.read_entries(&date_str, None, None);
-        print_entries(result, &date_str, cli.short);
+        print_entries(renderer, result, &date_str);
         return Ok(());
     }
 
     match (cli.from.as_deref(), cli.to.as_deref()) {
         (Some(from), Some(to)) => {
             let result = journal.read_entries(&from, Some(&to), None);
-            print_entries(result, &from, cli.short);
+            print_entries(renderer, result, &from);
             return Ok(());
         }
         (Some(from), None) => {
             let result = journal.read_entries(&from, Some(&"today"), None);
-            print_entries(result, &from, cli.short);
+            print_entries(renderer, result, &from);
             return Ok(());
         }
         (None, Some(_)) => {} // We can't have a 'to' without 'from'
@@ -83,10 +104,9 @@ fn run() -> Result<()> {
     }
 
     // Edit mode
-    if let Some(date_str) = cli.edit {
-        println!("Filtering on: {}", date_str);
+    if let Some(_date_str) = cli.edit {
         // TODO: We need to implement .find_entry in journal. Returns a path to specified date's file.
-        println!("Coming soon, editing single files!");
+        renderer.print_info(&format!("Coming soon, editing single files!"));
         return Ok(());
     }
 
@@ -100,29 +120,29 @@ fn run() -> Result<()> {
         let input = create_editor_buffer(&editor)?;
         let trimmed = input.trim();
         if trimmed.is_empty() {
-            println!("No entry to save, because no text was received.");
+            renderer.print_info(&format!("No entry to save, because no text was received."));
             return Ok(());
         }
         new_entry = journal.create_entry(&trimmed, None)?;
     }
-    println!(
-        "Saved: {} {} - {} -> {}",
-        format_date(new_entry.date, &journal.config.journal_date_format),
-        new_entry.time.format("%H:%M"),
-        new_entry.title,
-        new_entry.path.display()
-    );
+    let date = new_entry
+        .date
+        .format(&journal.config.journal_date_format)
+        .to_string();
+    let time = new_entry.time.format("%H:%M").to_string();
+    let title = new_entry.title.trim();
+    renderer.print_info(&format!("Added new entry to {}", new_entry.path.display()));
+    renderer.print_entry_line(&date, &time, title);
 
     Ok(())
 }
 
-fn print_entries(result: QueryResult, date_str: &str, short_mode: bool) {
-    let renderer = Renderer::new();
+fn print_entries(renderer: Renderer, result: QueryResult, date_str: &str) {
     if result.entries.is_empty() {
         renderer.print_info(&format!("No entries found for {}.", date_str));
     } else {
         renderer.print_info(&format!("{} entries found.", result.entries.len()));
-        renderer.print_entries(&result, short_mode);
+        renderer.print_entries(&result);
     }
     if !result.errors.is_empty() {
         renderer.print_md("\n# Errors:");

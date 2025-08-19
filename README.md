@@ -96,9 +96,9 @@ You can use the following keywords (and user-defined synonyms) to specify dates 
 
 ### Reading Entries
 
-Use the `--on` flag to view all entries for a given date.
-Use the `--from` flag to view all entries from the give day til today.
-Use the `--to` flag in combination with `--from` to view all entries in a range.
+- Use the `--on` flag to view all entries for a given date.
+- Use the `--from` flag to view all entries from the give day til today.
+- Use the `--to` flag in combination with `--from` to view all entries in a range.
 
 > [!NOTE] The current implementation assumes the user won't try and crashed their own computer.
 > If you provide a `--from` flag with a date very away in the past (01/01/01), you'll be waiting a while.
