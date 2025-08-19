@@ -8,7 +8,7 @@ use crate::parse_input::DateFilter::{Range, Single};
 use crate::parse_input::{ParseOptions, parse_date_token, parse_entry};
 use crate::paths::day_path;
 use crate::render::{format_day_header, format_entry_block};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chrono::{Local, NaiveDate, NaiveTime};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -190,14 +190,17 @@ impl Journal {
         let path = day_path(&self.config.journal_dir, date);
         if path.exists() {
             match fs::read_to_string(&path) {
-                Ok(content) => match parse_day_file(&content) {
-                    Ok(parsed_entries) => {
-                        entries.extend(parsed_entries);
+                Ok(file_content) => {
+                    let parse_result = parse_day_file(&file_content);
+                    entries.extend(parse_result.entries);
+
+                    for error in parse_result.errors {
+                        errors.push(QueryError::FileError {
+                            path: path.clone(),
+                            error: anyhow!(error),
+                        });
                     }
-                    Err(error) => {
-                        errors.push(QueryError::FileError { path, error });
-                    }
-                },
+                }
                 Err(error) => {
                     errors.push(QueryError::FileError {
                         path,
@@ -218,14 +221,17 @@ impl Journal {
             let path = day_path(&self.config.journal_dir, date);
             if path.exists() {
                 match fs::read_to_string(&path) {
-                    Ok(content) => match parse_day_file(&content) {
-                        Ok(parsed_entries) => {
-                            entries.extend(parsed_entries);
+                    Ok(file_content) => {
+                        let parse_result = parse_day_file(&file_content);
+                        entries.extend(parse_result.entries);
+
+                        for error in parse_result.errors {
+                            errors.push(QueryError::FileError {
+                                path: path.clone(),
+                                error: anyhow!(error),
+                            });
                         }
-                        Err(error) => {
-                            errors.push(QueryError::FileError { path, error });
-                        }
-                    },
+                    }
                     Err(error) => {
                         errors.push(QueryError::FileError {
                             path,

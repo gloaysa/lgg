@@ -513,6 +513,16 @@ mod tests {
     }
 
     #[test]
+    fn body_with_sub_headers() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
+        let p = parse_entry("My title\nAnd the body.\n### Header 3", opts(anchor));
+        assert_eq!(p.title, "My title");
+        assert_eq!(p.body, "And the body.\n### Header 3");
+        assert!(!p.explicit_date);
+        assert!(p.time.is_none());
+    }
+
+    #[test]
     fn custom_format_dd_mm_yyyy() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
         let fmts = &["%d-%m-%Y", "%d/%m/%Y"];

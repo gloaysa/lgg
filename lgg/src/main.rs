@@ -1,3 +1,5 @@
+mod renderer;
+
 use anyhow::Result;
 use clap::Parser;
 use lgg_core::{
@@ -5,6 +7,7 @@ use lgg_core::{
     journal::{QueryError, QueryResult},
     render::format_date,
 };
+use renderer::Renderer;
 use std::{
     fs,
     process::{Command, ExitCode},
@@ -59,36 +62,20 @@ fn run() -> Result<()> {
 
     // Read mode
     if let Some(date_str) = cli.on {
-        println!("Filtering on: {}", date_str);
         let result = journal.read_entries(&date_str, None, None);
-        print_entries(
-            result,
-            &date_str,
-            &journal.config.journal_date_format,
-            cli.short,
-        );
+        print_entries(result, &date_str, cli.short);
         return Ok(());
     }
 
     match (cli.from.as_deref(), cli.to.as_deref()) {
         (Some(from), Some(to)) => {
             let result = journal.read_entries(&from, Some(&to), None);
-            print_entries(
-                result,
-                &from,
-                &journal.config.journal_date_format,
-                cli.short,
-            );
+            print_entries(result, &from, cli.short);
             return Ok(());
         }
         (Some(from), None) => {
             let result = journal.read_entries(&from, Some(&"today"), None);
-            print_entries(
-                result,
-                &from,
-                &journal.config.journal_date_format,
-                cli.short,
-            );
+            print_entries(result, &from, cli.short);
             return Ok(());
         }
         (None, Some(_)) => {} // We can't have a 'to' without 'from'
@@ -129,31 +116,25 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn print_entries(result: QueryResult, date_str: &str, date_format: &String, short_mode: bool) {
+fn print_entries(result: QueryResult, date_str: &str, short_mode: bool) {
+    let renderer = Renderer::new();
     if result.entries.is_empty() {
-        println!("No entries found for {}.", date_str);
+        renderer.print_info(&format!("No entries found for {}.", date_str));
     } else {
-        for entry in result.entries {
-            println!(
-                "{} {}: {}",
-                format_date(entry.date, date_format),
-                entry.time.format("%H:%M"),
-                entry.title
-            );
-            if !entry.body.is_empty() && !short_mode {
-                println!("  {}", entry.body.replace('\n', "\n"));
-            }
-        }
+        renderer.print_info(&format!("{} entries found.", result.entries.len()));
+        renderer.print_entries(&result, short_mode);
     }
     if !result.errors.is_empty() {
-        eprintln!("\nWarnings:");
+        renderer.print_md("\n# Errors:");
         for error in result.errors {
             match error {
                 QueryError::FileError { path, error } => {
-                    eprintln!("- Could not process '{}': {}", path.display(), error);
+                    let message = format!("* Could not process '{}': {}", path.display(), error);
+                    renderer.print_md(&message);
                 }
                 QueryError::InvalidDate { input, error } => {
-                    eprintln!("- Could not process '{}': {}", input, error);
+                    let message = format!("* Could not process '{}': {}", input, error);
+                    renderer.print_md(&message);
                 }
             }
         }

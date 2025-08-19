@@ -20,6 +20,7 @@ The MVP is focused on providing the essential features for a command-line journa
     - `--to <date>` / `--until <date>`
     - `--short` displays the entry without the body.
   - [x] Implement a resilient query system that returns warnings for malformed files instead of crashing.
+  - [x] Better UI on Reader mode, parsing Markdown.
 - **Storage**:
   - [x] Store entries in the `YYYY/MM/YYYY-MM-DD.md` file structure.
   - [x] Automatically create daily files and directories.
@@ -42,7 +43,6 @@ These are the highest-priority features required to complete the MVP.
     - `--tag <tag>`
     - `-n`/`--limit <count>`
     - `--reverse`
-  - [ ] Better UI on Reader mode, parsing Markdown.
 
 ## Future Ideas (Post-MVP)
 
