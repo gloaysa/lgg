@@ -4,7 +4,7 @@ use super::format_utils::{format_day_header, format_entry_block};
 use super::journal_entry::JournalEntry;
 use super::parse_entries::parse_file_content;
 use super::parse_input::DateFilter::{Range, Single};
-use super::parse_input::{ParseOptions, parse_date_token, parse_entry};
+use super::parse_input::{ParseOptions, parse_date_token, parse_raw_user_input};
 use super::path_utils::day_path;
 use crate::config::Config;
 use anyhow::anyhow;
@@ -84,11 +84,11 @@ impl Journal {
             reference_date,
             formats: Some(&format_strs),
         };
-        let parsed = parse_entry(input, Some(opts));
-        let date = parsed.date;
-        let time = if let Some(t) = parsed.time {
+        let parsed_input = parse_raw_user_input(input, Some(opts));
+        let date = parsed_input.date;
+        let time = if let Some(t) = parsed_input.time {
             t
-        } else if parsed.explicit_date {
+        } else if parsed_input.explicit_date {
             self.config.default_time
         } else {
             Local::now().time()
@@ -101,30 +101,60 @@ impl Journal {
         }
 
         let is_new = !path.exists();
-        let mut f = OpenOptions::new()
+        let header = format_day_header(&self.config.journal_date_format, date);
+        let block = format_entry_block(&parsed_input.title, &parsed_input.body, Some(time));
+
+        let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&path)
             .with_context(|| format!("opening {}", path.display()))?;
 
         if is_new {
-            let header = format_day_header(&self.config.journal_date_format, date);
-            writeln!(f, "{header}\n")
+            writeln!(file, "{header}\n")
                 .with_context(|| format!("writing day header to {}", path.display()))?;
+            write!(file, "{block}")
+                .with_context(|| format!("appending entry to {}", path.display()))?;
         } else {
-            // Add a blank line before new entry
-            writeln!(f).ok();
-        }
+            // Read the file and find, based on time, where to put the new entry.
+            let new_entry = JournalEntry {
+                date,
+                time,
+                title: parsed_input.title.to_string(),
+                body: parsed_input.body.to_string(),
+                tags: parsed_input.tags.clone(),
+                path: path.clone(),
+            };
+            let mut result = self.parse_file(&path);
 
-        let block = format_entry_block(&parsed.title, &parsed.body, Some(time));
-        write!(f, "{block}").with_context(|| format!("appending entry to {}", path.display()))?;
+            if !result.errors.is_empty() {
+                // TODO: This function should be able to gracefully return errors.
+                // We need to let the user know that there's a problem with their file.
+                // We still append the entry because is better than simply erroring out.
+                writeln!(file, "{header}\n")
+                    .with_context(|| format!("writing day header to {}", path.display()))?;
+                write!(file, "{block}")
+                    .with_context(|| format!("appending entry to {}", path.display()))?;
+            }
+
+            result.entries.push(new_entry);
+            result.entries.sort_by_key(|e| e.time);
+            let mut new_content = header;
+            for entry in result.entries {
+                let block = format_entry_block(&entry.title, &entry.body, Some(entry.time));
+
+                new_content.push_str(&block);
+            }
+
+            fs::write(&path, new_content)?;
+        }
 
         Ok(JournalEntry {
             date,
             time,
-            title: parsed.title,
-            body: parsed.body,
-            tags: Vec::new(),
+            title: parsed_input.title,
+            body: parsed_input.body,
+            tags: parsed_input.tags,
             path,
         })
     }
@@ -183,8 +213,8 @@ impl Journal {
 
     /// Parses the entire content of a daily journal file.
     ///
-    /// This function acts as the main entry point for file parsing. It expects the file
-    /// to have a specific format:
+    /// This function acts as the main entry point for file parsing.
+    /// It expects the file to have a specific format:
     /// - A mandatory header on the first line (e.g., `# Friday, 15 Aug 2025`).
     /// - Zero or more entry blocks, each starting with `## HH:MM - Title`.
     ///

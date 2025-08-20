@@ -36,6 +36,7 @@ pub struct ParsedInline {
     pub time: Option<NaiveTime>,
     pub title: String,
     pub body: String,
+    pub tags: Vec<String>,
     /// Whether a date (of any kind) was explicitly provided in the prefix.
     pub explicit_date: bool,
 }
@@ -56,7 +57,7 @@ pub struct ParsedInline {
 ///
 /// A [`ParsedInline`] struct containing the resolved date, optional time, title, and body.
 /// If no date prefix is found, the date defaults to the reference date.
-pub fn parse_entry(input: &str, options: Option<ParseOptions>) -> ParsedInline {
+pub fn parse_raw_user_input(input: &str, options: Option<ParseOptions>) -> ParsedInline {
     let options = options.unwrap_or_default();
     let reference_date = options
         .reference_date
@@ -78,6 +79,7 @@ pub fn parse_entry(input: &str, options: Option<ParseOptions>) -> ParsedInline {
         time: time_opt,
         title,
         body,
+        tags: Vec::new(),
         explicit_date,
     }
 }
@@ -421,7 +423,7 @@ mod tests {
     #[test]
     fn iso_date_prefix() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
-        let p = parse_entry("01/08/2025: Title. Body", opts(anchor));
+        let p = parse_raw_user_input("01/08/2025: Title. Body", opts(anchor));
         assert_eq!(p.date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
         assert!(p.time.is_none());
         assert_eq!(p.title, "Title");
@@ -432,7 +434,7 @@ mod tests {
     #[test]
     fn iso_datetime_prefix() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
-        let p = parse_entry("2025-08-01T13:30: # Title\nBody", opts(anchor));
+        let p = parse_raw_user_input("2025-08-01T13:30: # Title\nBody", opts(anchor));
         assert_eq!(p.date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(13, 30, 0).unwrap()));
         assert_eq!(p.title, "Title");
@@ -443,7 +445,7 @@ mod tests {
     #[test]
     fn natural_yesterday_with_time() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
-        let p1 = parse_entry("yesterday at 6am: Note 1", opts(anchor));
+        let p1 = parse_raw_user_input("yesterday at 6am: Note 1", opts(anchor));
         assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 14).unwrap());
         assert_eq!(p1.time, Some(NaiveTime::from_hms_opt(6, 0, 0).unwrap()));
         assert_eq!(p1.title, "Note 1");
@@ -452,11 +454,11 @@ mod tests {
     #[test]
     fn natural_single_hour_with_time() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
-        let p1 = parse_entry("today at 9: Note 1", opts(anchor));
-        let p2 = parse_entry("today at 17: Note 2", opts(anchor));
-        let p3 = parse_entry("today at 9am: Note 3", opts(anchor));
-        let p4 = parse_entry("at morning: Note 4", opts(anchor));
-        let p5 = parse_entry("today at morning: Note 5", opts(anchor));
+        let p1 = parse_raw_user_input("today at 9: Note 1", opts(anchor));
+        let p2 = parse_raw_user_input("today at 17: Note 2", opts(anchor));
+        let p3 = parse_raw_user_input("today at 9am: Note 3", opts(anchor));
+        let p4 = parse_raw_user_input("at morning: Note 4", opts(anchor));
+        let p5 = parse_raw_user_input("today at morning: Note 5", opts(anchor));
         assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
         assert_eq!(p1.time, Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()));
         assert_eq!(p1.title, "Note 1");
@@ -477,7 +479,7 @@ mod tests {
     #[test]
     fn title_newline_body() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
-        let p = parse_entry("My title\nAnd the body.", opts(anchor));
+        let p = parse_raw_user_input("My title\nAnd the body.", opts(anchor));
         assert_eq!(p.title, "My title");
         assert_eq!(p.body, "And the body.");
         assert!(!p.explicit_date);
@@ -487,7 +489,7 @@ mod tests {
     #[test]
     fn body_with_sub_headers() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
-        let p = parse_entry("My title\nAnd the body.\n### Header 3", opts(anchor));
+        let p = parse_raw_user_input("My title\nAnd the body.\n### Header 3", opts(anchor));
         assert_eq!(p.title, "My title");
         assert_eq!(p.body, "And the body.\n### Header 3");
         assert!(!p.explicit_date);
@@ -502,8 +504,8 @@ mod tests {
             reference_date: Some(anchor),
             formats: Some(fmts),
         });
-        let p1 = parse_entry("01-08-2025: Title 1.", custom_opts);
-        let p2 = parse_entry("01/09/2025: Title 2.", custom_opts);
+        let p1 = parse_raw_user_input("01-08-2025: Title 1.", custom_opts);
+        let p2 = parse_raw_user_input("01/09/2025: Title 2.", custom_opts);
         assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
         assert!(p1.time.is_none());
         assert_eq!(p1.title, "Title 1");
@@ -519,7 +521,7 @@ mod tests {
     #[test]
     fn hashes_stripped_from_title() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
-        let p = parse_entry("today: # My Title ##\n### Body", opts(anchor));
+        let p = parse_raw_user_input("today: # My Title ##\n### Body", opts(anchor));
         assert_eq!(p.title, "My Title");
         assert_eq!(p.body, "### Body");
     }
@@ -531,27 +533,27 @@ mod tests {
         let p_opts = opts(anchor);
 
         // Test parsing of each day of the week relative to the anchor
-        let monday = parse_entry("monday: Task A", p_opts);
+        let monday = parse_raw_user_input("monday: Task A", p_opts);
         assert_eq!(monday.date, NaiveDate::from_ymd_opt(2025, 8, 18).unwrap());
 
-        let tuesday = parse_entry("tuesday: Task B", p_opts);
+        let tuesday = parse_raw_user_input("tuesday: Task B", p_opts);
         assert_eq!(tuesday.date, NaiveDate::from_ymd_opt(2025, 8, 19).unwrap());
 
         // A day keyword matching the anchor date should return the anchor date
-        let wednesday = parse_entry("wednesday: Task C", p_opts);
+        let wednesday = parse_raw_user_input("wednesday: Task C", p_opts);
         assert_eq!(wednesday.date, anchor);
 
         // Days from the "previous week" should resolve correctly
-        let thursday = parse_entry("thursday: Task D", p_opts);
+        let thursday = parse_raw_user_input("thursday: Task D", p_opts);
         assert_eq!(thursday.date, NaiveDate::from_ymd_opt(2025, 8, 14).unwrap());
 
-        let friday = parse_entry("friday: Task E", p_opts);
+        let friday = parse_raw_user_input("friday: Task E", p_opts);
         assert_eq!(friday.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
 
-        let saturday = parse_entry("saturday: Task F", p_opts);
+        let saturday = parse_raw_user_input("saturday: Task F", p_opts);
         assert_eq!(saturday.date, NaiveDate::from_ymd_opt(2025, 8, 16).unwrap());
 
-        let sunday = parse_entry("sunday: Task G", p_opts);
+        let sunday = parse_raw_user_input("sunday: Task G", p_opts);
         assert_eq!(sunday.date, NaiveDate::from_ymd_opt(2025, 8, 17).unwrap());
     }
 
@@ -560,68 +562,68 @@ mod tests {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 20).unwrap();
         let p_opts = opts(anchor);
 
-        let p = parse_entry("at morning: Title", p_opts);
+        let p = parse_raw_user_input("at morning: Title", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
 
-        let p = parse_entry("today at morning: Title A", p_opts);
+        let p = parse_raw_user_input("today at morning: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
 
-        let p = parse_entry("tuesday at noon: Title A", p_opts);
+        let p = parse_raw_user_input("tuesday at noon: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(12, 0, 0).unwrap()));
 
-        let p = parse_entry("wednesday at evening: Title A", p_opts);
+        let p = parse_raw_user_input("wednesday at evening: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(18, 0, 0).unwrap()));
 
-        let p = parse_entry("thursday at night: Title A", p_opts);
+        let p = parse_raw_user_input("thursday at night: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(21, 0, 0).unwrap()));
 
-        let p = parse_entry("friday at midnight: Title A", p_opts);
+        let p = parse_raw_user_input("friday at midnight: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(0, 0, 0).unwrap()));
 
         // 12-hour format
-        let p = parse_entry("11/04/2025 at 5am: Title A", p_opts);
+        let p = parse_raw_user_input("11/04/2025 at 5am: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(5, 0, 0).unwrap()));
 
-        let p = parse_entry("at 5pm: Title A", p_opts);
+        let p = parse_raw_user_input("at 5pm: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()));
 
-        let p = parse_entry("at 5:30am: Title A", p_opts);
+        let p = parse_raw_user_input("at 5:30am: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(5, 30, 0).unwrap()));
 
-        let p = parse_entry("at 5:30 pm: Title A", p_opts);
+        let p = parse_raw_user_input("at 5:30 pm: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(17, 30, 0).unwrap()));
 
-        let p = parse_entry("at 12am: Title A", p_opts);
+        let p = parse_raw_user_input("at 12am: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(0, 0, 0).unwrap()));
 
-        let p = parse_entry("at 12pm: Title A", p_opts);
+        let p = parse_raw_user_input("at 12pm: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(12, 0, 0).unwrap()));
 
-        let p = parse_entry("at 5PM: Title A", p_opts);
+        let p = parse_raw_user_input("at 5PM: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()));
 
-        let p = parse_entry("at 12:45AM: Title A", p_opts);
+        let p = parse_raw_user_input("at 12:45AM: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(0, 45, 0).unwrap()));
 
         // 24-hour format
-        let p = parse_entry("at 08:00: Title A", p_opts);
+        let p = parse_raw_user_input("at 08:00: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
 
-        let p = parse_entry("at 23:59: Title A", p_opts);
+        let p = parse_raw_user_input("at 23:59: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(23, 59, 0).unwrap()));
 
-        let p = parse_entry("at 8: Title A", p_opts);
+        let p = parse_raw_user_input("at 8: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
 
-        let p = parse_entry("at 17: Title A", p_opts);
+        let p = parse_raw_user_input("at 17: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()));
 
         // Invalid
-        let p = parse_entry("at 25:00: Title A", p_opts);
+        let p = parse_raw_user_input("at 25:00: Title A", p_opts);
         assert!(p.time.is_none());
-        let p = parse_entry("at 13:00pm: Title A", p_opts);
+        let p = parse_raw_user_input("at 13:00pm: Title A", p_opts);
         assert!(p.time.is_none());
-        let p = parse_entry("at not-a-time: Title A", p_opts);
+        let p = parse_raw_user_input("at not-a-time: Title A", p_opts);
         assert!(p.time.is_none());
     }
 
