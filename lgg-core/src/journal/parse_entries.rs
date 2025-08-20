@@ -1,6 +1,9 @@
 //! Parses the content of a daily journal file into structured `Entry` objects.
+use std::collections::HashSet;
+
 use super::journal_entry::ParsedEntry;
 use chrono::{NaiveDate, NaiveTime};
+use regex::Regex;
 
 #[derive(Debug)]
 pub struct ParseResult {
@@ -42,6 +45,7 @@ pub fn parse_file_content(content: &str) -> ParseResult {
         if let Some(newline_pos) = block.find('\n') {
             let heading = &block[..newline_pos];
             let body = block[newline_pos..].trim().to_string();
+            let tags = extract_tags(&block);
 
             match heading.find(" - ") {
                 Some(separator_pos) => {
@@ -54,7 +58,7 @@ pub fn parse_file_content(content: &str) -> ParseResult {
                             time,
                             title,
                             body,
-                            tags: Vec::new(),
+                            tags,
                         }),
                         Err(_) => errors.push(
                             format!("Invalid time in entry header `{heading}`. Expected a 24-hour time `HH:MM`.").to_string(),
@@ -69,13 +73,14 @@ pub fn parse_file_content(content: &str) -> ParseResult {
             if let Some(separator_pos) = block.find(" - ") {
                 let time_str = block[..separator_pos].trim();
                 let title = block[separator_pos + 3..].trim().to_string();
+                let tags = extract_tags(&title);
                 if let Ok(time) = NaiveTime::parse_from_str(time_str, "%H:%M") {
                     entries.push(ParsedEntry {
                         date,
                         time,
                         title,
                         body: String::new(),
-                        tags: Vec::new(),
+                        tags,
                     });
                 }
             }
@@ -94,6 +99,19 @@ fn parse_date_from_header_line(line: &str) -> Option<NaiveDate> {
     line.trim()
         .strip_prefix("# ")
         .and_then(|date_str| NaiveDate::parse_from_str(date_str, "%A, %d %b %Y").ok())
+}
+
+/// Finds words starting with # or @
+/// Matches one or more letters, numbers, or underscores.
+fn extract_tags(text: &str) -> Vec<String> {
+    let re = Regex::new(r"[@#]\w+").unwrap();
+    let mut tags: Vec<String> = re.find_iter(text)
+        .map(|mat| mat.as_str().to_string())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    tags.sort();
+    tags
 }
 
 #[cfg(test)]
@@ -189,5 +207,22 @@ With a body.
         assert!(result.entries[0].body.is_empty());
         assert_eq!(result.entries[1].title, "Another entry");
         assert!(!result.entries[1].body.is_empty());
+    }
+
+    #[test]
+    fn finds_tags_on_title_and_body() {
+        let content = r#"# Friday, 15 Aug 2025
+
+## 12:34 - Title @tag
+## 18:05 - Another entry
+
+With two equal @tags @tags and another @different_tag.
+"#;
+        let result = parse_file_content(content.trim());
+        assert_eq!(result.entries.len(), 2);
+        assert_eq!(result.entries[0].tags[0], "@tag");
+        assert_eq!(result.entries[1].tags.len(), 2);
+        assert_eq!(result.entries[1].tags[0], "@different_tag");
+        assert_eq!(result.entries[1].tags[1], "@tags");
     }
 }

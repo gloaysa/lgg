@@ -19,14 +19,8 @@ pub fn write_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<C
         }
         new_entry = journal.create_entry(&trimmed, None)?;
     }
-    let date = new_entry
-        .date
-        .format(&journal.config.journal_date_format)
-        .to_string();
-    let time = new_entry.time.format("%H:%M").to_string();
-    let title = new_entry.title.trim();
     renderer.print_info(&format!("Added new entry to {}", new_entry.path.display()));
-    renderer.print_entry_line(&date, &time, title);
+    renderer.print_entry_line(&new_entry);
     Ok(CliModeResult::NothingToDo)
 }
 

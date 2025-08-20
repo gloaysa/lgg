@@ -340,8 +340,8 @@ mod tests {
         let result = j.read_entries("today", None, None);
         assert!(result.errors.is_empty());
         assert_eq!(result.entries.len(), 2);
-        assert_eq!(result.entries[0].title, "First entry");
-        assert_eq!(result.entries[1].title, "Second entry");
+        assert_eq!(result.entries[0].title, "First entry.");
+        assert_eq!(result.entries[1].title, "Second entry.");
     }
 
     #[test]
@@ -354,21 +354,21 @@ mod tests {
             .unwrap();
         j.create_entry("saturday: First entry.", Some(anchor))
             .unwrap();
-        j.create_entry("yesterday: Second entry.", Some(anchor))
+        j.create_entry("yesterday: Second entry!", Some(anchor))
             .unwrap();
-        j.create_entry("today: This week.", Some(anchor)).unwrap();
+        j.create_entry("today: This week?", Some(anchor)).unwrap();
         j.create_entry("11/08/2025: Next week", Some(anchor))
             .unwrap();
 
         let last_week = j.read_entries("last week", None, Some(anchor));
         assert!(last_week.errors.is_empty());
         assert_eq!(last_week.entries.len(), 2);
-        assert_eq!(last_week.entries[0].title, "First entry");
-        assert_eq!(last_week.entries[1].title, "Second entry");
+        assert_eq!(last_week.entries[0].title, "First entry.");
+        assert_eq!(last_week.entries[1].title, "Second entry!");
         let this_week = j.read_entries("this week", None, Some(anchor));
         assert!(this_week.errors.is_empty());
         assert_eq!(this_week.entries.len(), 1);
-        assert_eq!(this_week.entries[0].title, "This week");
+        assert_eq!(this_week.entries[0].title, "This week?");
     }
 
     #[test]

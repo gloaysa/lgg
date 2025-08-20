@@ -1,5 +1,5 @@
 use super::theme::OneDark;
-use lgg_core::QueryResult;
+use lgg_core::{JournalEntry, QueryResult};
 use termimad::{
     MadSkin,
     crossterm::style::{Color, Stylize},
@@ -43,15 +43,21 @@ impl Renderer {
         }
     }
 
-    pub fn print_entry_line(&self, date: &str, time: &str, title: &str) {
-        if self.opts.use_color {
-            let date = date.with(Color::Cyan);
-            let time = time.with(Color::Blue);
-            let title = title.with(Color::Yellow);
-            println!("{} {} - {}", date, time, title);
-        } else {
-            println!("{} {} - {}", date, time, title);
+    pub fn print_entry_line(&self, entry: &JournalEntry) {
+        let mut date = entry.date.to_string();
+        let mut time = entry.time.to_string();
+        let mut title = entry.title.to_string();
+        let mut tags = String::new();
+        if !entry.tags.is_empty() {
+            tags = format!("[{}], ", entry.tags.join(", "));
         }
+        if self.opts.use_color {
+            date = date.with(Color::Cyan).to_string();
+            time = time.with(Color::Blue).to_string();
+            title = title.with(Color::Yellow).to_string();
+            tags = tags.with(Color::Green).to_string();
+        }
+        println!("{} {} - {} {}", date, time, title, tags);
     }
 
     pub fn print_entries<'a>(&self, result: &QueryResult) {
@@ -60,20 +66,20 @@ impl Renderer {
             return;
         }
 
-        for (i, e) in result.entries.iter().enumerate() {
-            let date = e.date.format(&self.opts.date_format).to_string();
-            let time = e.time.format("%H:%M").to_string();
-            let title = e.title.trim();
+        for (i, entry) in result.entries.iter().enumerate() {
+            let date = entry.date.format(&self.opts.date_format).to_string();
+            let time = entry.time.format("%H:%M").to_string();
+            let title = entry.title.trim();
             if self.opts.short_mode {
-                self.print_entry_line(&date, &time, &title);
+                self.print_entry_line(&entry);
                 continue;
             }
             let heading = format!("## {} {}: {}", &date, &time, &title);
 
-            let body = if e.body.trim().is_empty() {
+            let body = if entry.body.trim().is_empty() {
                 String::new()
             } else {
-                let mut parsed_body = e.body.trim_end().to_string();
+                let mut parsed_body = entry.body.trim_end().to_string();
                 parsed_body = highlight_tags(&parsed_body);
                 parsed_body
             };

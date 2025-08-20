@@ -386,13 +386,13 @@ fn split_title_body(text: &str) -> (String, String) {
         .char_indices()
         .find(|&(_, ch)| ch == '\n' || ch == '\r')
     {
-        let title = text[..i].trim().to_string();
+        let title = text[..(i + ch.len_utf8())].trim().to_string();
         let body = text[i + ch.len_utf8()..].trim().to_string();
         return (title, body);
     }
     for (i, ch) in text.char_indices() {
         if ch == '.' || ch == '?' || ch == '!' {
-            let title = text[..i].trim().to_string();
+            let title = text[..(i + ch.len_utf8())].trim().to_string();
             let body = text[i + ch.len_utf8()..].trim().to_string();
             return (title, body);
         }
@@ -423,10 +423,10 @@ mod tests {
     #[test]
     fn iso_date_prefix() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
-        let p = parse_raw_user_input("01/08/2025: Title. Body", opts(anchor));
+        let p = parse_raw_user_input("01/08/2025: Title.\n Body", opts(anchor));
         assert_eq!(p.date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
         assert!(p.time.is_none());
-        assert_eq!(p.title, "Title");
+        assert_eq!(p.title, "Title.");
         assert_eq!(p.body, "Body");
         assert!(p.explicit_date);
     }
@@ -508,12 +508,12 @@ mod tests {
         let p2 = parse_raw_user_input("01/09/2025: Title 2.", custom_opts);
         assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
         assert!(p1.time.is_none());
-        assert_eq!(p1.title, "Title 1");
+        assert_eq!(p1.title, "Title 1.");
         assert!(p1.body.is_empty());
         assert!(p1.explicit_date);
         assert_eq!(p2.date, NaiveDate::from_ymd_opt(2025, 9, 1).unwrap());
         assert!(p2.time.is_none());
-        assert_eq!(p2.title, "Title 2");
+        assert_eq!(p2.title, "Title 2.");
         assert!(p2.body.is_empty());
         assert!(p2.explicit_date);
     }
