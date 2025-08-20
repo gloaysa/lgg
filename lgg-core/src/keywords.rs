@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
+use regex::Regex;
 use std::collections::HashMap;
 use std::sync::RwLock;
-use regex::Regex;
 use strum::IntoEnumIterator;
 use strum_macros::{AsRefStr, EnumIter, EnumString};
 
@@ -197,8 +197,14 @@ mod tests {
 
     #[test]
     fn find_word_finds_whole_word() {
-        assert_eq!(Keywords::find_word(Keyword::At, "text at text"), Some("at".to_string()));
-        assert_eq!(Keywords::find_word(Keyword::Friday, "go friday go"), Some("friday".to_string()));
+        assert_eq!(
+            Keywords::find_word(Keyword::At, "text at text"),
+            Some("at".to_string())
+        );
+        assert_eq!(
+            Keywords::find_word(Keyword::Friday, "go friday go"),
+            Some("friday".to_string())
+        );
     }
 
     #[test]
@@ -209,8 +215,14 @@ mod tests {
 
     #[test]
     fn find_position_finds_whole_word() {
-        assert_eq!(Keywords::find_position(Keyword::At, "text at text"), Some(5));
-        assert_eq!(Keywords::find_position(Keyword::Friday, "go friday go"), Some(3));
+        assert_eq!(
+            Keywords::find_position(Keyword::At, "text at text"),
+            Some(5)
+        );
+        assert_eq!(
+            Keywords::find_position(Keyword::Friday, "go friday go"),
+            Some(3)
+        );
     }
 
     #[test]
@@ -227,5 +239,4 @@ mod tests {
             assert!(true);
         }
     }
-
 }
