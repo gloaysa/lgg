@@ -135,6 +135,8 @@ impl Journal {
                     .with_context(|| format!("writing day header to {}", path.display()))?;
                 write!(file, "{block}")
                     .with_context(|| format!("appending entry to {}", path.display()))?;
+
+                return Ok(new_entry);
             }
 
             result.entries.push(new_entry);
