@@ -1,27 +1,18 @@
 //! The core `Journal` struct and its associated types, providing the primary API for interaction.
-
+use super::date_utils::get_dates_in_range;
+use super::format_utils::{format_day_header, format_entry_block};
+use super::journal_entry::JournalEntry;
+use super::parse_entries::parse_file_content;
+use super::parse_input::DateFilter::{Range, Single};
+use super::parse_input::{ParseOptions, parse_date_token, parse_entry};
+use super::path_utils::day_path;
 use crate::config::Config;
-use crate::dates::get_dates_in_range;
-use crate::entry::Entry;
-use crate::parse_entries::parse_day_file;
-use crate::parse_input::DateFilter::{Range, Single};
-use crate::parse_input::{ParseOptions, parse_date_token, parse_entry};
-use crate::paths::day_path;
-use crate::render::{format_day_header, format_entry_block};
-use anyhow::{Context, Result, anyhow};
-use chrono::{Local, NaiveDate, NaiveTime};
+use anyhow::anyhow;
+use anyhow::{Context, Result};
+use chrono::{Local, NaiveDate};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-
-/// A reference to a newly created entry, containing its metadata.
-#[derive(Debug)]
-pub struct EntryRef {
-    pub date: NaiveDate,
-    pub time: NaiveTime,
-    pub title: String,
-    pub path: PathBuf,
-}
 
 /// The central struct for all journal operations.
 ///
@@ -45,7 +36,7 @@ pub enum QueryError {
 /// The complete result of a query, containing successfully parsed entries and any warnings.
 #[derive(Debug)]
 pub struct QueryResult {
-    pub entries: Vec<Entry>,
+    pub entries: Vec<JournalEntry>,
     pub errors: Vec<QueryError>,
 }
 
@@ -78,7 +69,11 @@ impl Journal {
     /// * `input` - a string with the user's input (eg 'yesterday: I did some coding.').
     /// * `reference_date` - Optional argument that will allow to modify the date of reference for
     /// relatives dates (yesterday, tomorrow...)
-    pub fn create_entry(&self, input: &str, reference_date: Option<NaiveDate>) -> Result<EntryRef> {
+    pub fn create_entry(
+        &self,
+        input: &str,
+        reference_date: Option<NaiveDate>,
+    ) -> Result<JournalEntry> {
         let format_strs: Vec<&str> = self
             .config
             .input_date_formats
@@ -113,7 +108,7 @@ impl Journal {
             .with_context(|| format!("opening {}", path.display()))?;
 
         if is_new {
-            let header = format_day_header(date, &self.config.journal_date_format);
+            let header = format_day_header(&self.config.journal_date_format, date);
             writeln!(f, "{header}\n")
                 .with_context(|| format!("writing day header to {}", path.display()))?;
         } else {
@@ -124,10 +119,12 @@ impl Journal {
         let block = format_entry_block(&parsed.title, &parsed.body, Some(time));
         write!(f, "{block}").with_context(|| format!("appending entry to {}", path.display()))?;
 
-        Ok(EntryRef {
+        Ok(JournalEntry {
             date,
             time,
             title: parsed.title,
+            body: parsed.body,
+            tags: Vec::new(),
             path,
         })
     }
@@ -184,31 +181,72 @@ impl Journal {
         QueryResult { entries, errors }
     }
 
+    /// Parses the entire content of a daily journal file.
+    ///
+    /// This function acts as the main entry point for file parsing. It expects the file
+    /// to have a specific format:
+    /// - A mandatory header on the first line (e.g., `# Friday, 15 Aug 2025`).
+    /// - Zero or more entry blocks, each starting with `## HH:MM - Title`.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the file to read.
+    ///
+    /// # Returns
+    ///
+    /// A `QueryResult` containing a `Vec<JournalEntry>` and `errors` in case some where found,
+    /// if the path isn't valid, the file is empty or the header is malformed or a specific entry is invalid.
+    pub fn parse_file(&self, path: &PathBuf) -> QueryResult {
+        let mut entries = Vec::new();
+        let mut errors = Vec::new();
+        if !path.exists() {
+            errors.push(QueryError::FileError {
+                path: path.clone(),
+                error: anyhow!(format!("File does not exist in path: {}", path.display())),
+            });
+            return QueryResult { entries, errors };
+        }
+        match fs::read_to_string(&path) {
+            Ok(file_content) => {
+                let parse_result = parse_file_content(&file_content);
+                for entry in parse_result.entries {
+                    entries.push(JournalEntry {
+                        date: entry.date,
+                        time: entry.time,
+                        title: entry.title,
+                        body: entry.body,
+                        tags: entry.tags,
+                        path: path.clone(),
+                    });
+                }
+
+                for error in parse_result.errors {
+                    errors.push(QueryError::FileError {
+                        path: path.clone(),
+                        error: anyhow!(error),
+                    });
+                }
+            }
+            Err(error) => {
+                errors.push(QueryError::FileError {
+                    path: path.clone(),
+                    error: error.into(),
+                });
+            }
+        }
+        QueryResult { entries, errors }
+    }
+
     fn read_single_date_entry(&self, date: NaiveDate) -> QueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
         let path = day_path(&self.config.journal_dir, date);
         if path.exists() {
-            match fs::read_to_string(&path) {
-                Ok(file_content) => {
-                    let parse_result = parse_day_file(&file_content);
-                    entries.extend(parse_result.entries);
-
-                    for error in parse_result.errors {
-                        errors.push(QueryError::FileError {
-                            path: path.clone(),
-                            error: anyhow!(error),
-                        });
-                    }
-                }
-                Err(error) => {
-                    errors.push(QueryError::FileError {
-                        path,
-                        error: error.into(),
-                    });
-                }
-            }
+            let parse_result = self.parse_file(&path);
+            entries.extend(parse_result.entries);
+            errors.extend(parse_result.errors);
         }
+
         QueryResult { entries, errors }
     }
 
@@ -220,25 +258,9 @@ impl Journal {
         for date in range {
             let path = day_path(&self.config.journal_dir, date);
             if path.exists() {
-                match fs::read_to_string(&path) {
-                    Ok(file_content) => {
-                        let parse_result = parse_day_file(&file_content);
-                        entries.extend(parse_result.entries);
-
-                        for error in parse_result.errors {
-                            errors.push(QueryError::FileError {
-                                path: path.clone(),
-                                error: anyhow!(error),
-                            });
-                        }
-                    }
-                    Err(error) => {
-                        errors.push(QueryError::FileError {
-                            path,
-                            error: error.into(),
-                        });
-                    }
-                }
+                let parse_result = self.parse_file(&path);
+                entries.extend(parse_result.entries);
+                errors.extend(parse_result.errors);
             }
         }
 
@@ -249,8 +271,7 @@ impl Journal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::tests::mk_config;
-    use crate::paths::day_path;
+    use crate::config::mk_config;
     use std::fs;
     use tempfile::tempdir;
 
@@ -348,4 +369,7 @@ mod tests {
         assert_eq!(result.errors.len(), 1);
         assert!(matches!(&result.errors[0], QueryError::FileError { .. }));
     }
+
+    #[test]
+    fn header_formats_readably() {}
 }

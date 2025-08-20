@@ -1,12 +1,6 @@
-pub mod config;
-pub mod dates;
-pub mod entry;
-pub mod journal;
-pub mod keywords;
-pub mod parse_entries;
-pub mod parse_input;
-pub mod paths;
-pub mod render;
+mod config;
+mod journal;
+mod keywords;
 
 pub use config::Config;
-pub use journal::{EntryRef, Journal};
+pub use journal::{Journal, JournalEntry, QueryError, QueryResult};

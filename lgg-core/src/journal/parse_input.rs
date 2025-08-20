@@ -56,25 +56,6 @@ pub struct ParsedInline {
 ///
 /// A [`ParsedInline`] struct containing the resolved date, optional time, title, and body.
 /// If no date prefix is found, the date defaults to the reference date.
-///
-/// # Examples
-///
-/// ```
-/// # use chrono::{NaiveDate, NaiveTime};
-/// # use lgg_core::parse_input::{parse_entry, ParseOptions};
-/// let opts = ParseOptions {
-///     reference_date: Some(NaiveDate::from_ymd_opt(2025, 8, 17).unwrap()),
-///     ..Default::default()
-/// };
-///
-/// let parsed = parse_entry("yesterday at 8pm: Project kickoff. It went well.", Some(opts));
-///
-/// assert_eq!(parsed.date, NaiveDate::from_ymd_opt(2025, 8, 16).unwrap());
-/// assert_eq!(parsed.time, Some(NaiveTime::from_hms_opt(20, 0, 0).unwrap()));
-/// assert_eq!(parsed.title, "Project kickoff");
-/// assert_eq!(parsed.body, "It went well.");
-/// assert!(parsed.explicit_date);
-/// ```
 pub fn parse_entry(input: &str, options: Option<ParseOptions>) -> ParsedInline {
     let options = options.unwrap_or_default();
     let reference_date = options
@@ -135,30 +116,6 @@ pub fn parse_entry(input: &str, options: Option<ParseOptions>) -> ParsedInline {
 ///
 /// `Some(DateFilter)` if parsing succeeds, `None` otherwise.
 ///
-/// # Examples
-///
-/// ```
-/// # use chrono::NaiveDate;
-/// # use lgg_core::parse_input::{parse_date_token, ParseOptions, DateFilter};
-///
-/// // Fixed anchor for deterministic tests (Sunday, 2025-08-17)
-/// let opts = ParseOptions {
-///     reference_date: Some(NaiveDate::from_ymd_opt(2025, 8, 17).unwrap()),
-///     formats: Some(&["%Y-%m-%d", "%d-%m-%Y"]),
-/// };
-///
-/// // Single keyword
-/// let y = parse_date_token("yesterday", None, Some(opts.clone())).unwrap();
-/// assert_eq!(y, DateFilter::Single(NaiveDate::from_ymd_opt(2025, 8, 16).unwrap()));
-///
-/// // With start and end date
-/// let r = parse_date_token("2025-08-20", Some("2025-08-10"), Some(opts.clone())).unwrap();
-/// assert_eq!(r, DateFilter::Range(
-///     NaiveDate::from_ymd_opt(2025, 8, 20).unwrap(),
-///     NaiveDate::from_ymd_opt(2025, 8, 10).unwrap(),
-/// ));
-///
-/// ```
 pub fn parse_date_token(
     start_date: &str,
     end_date: Option<&str>,
@@ -292,24 +249,6 @@ fn resolve_date_token(
 /// # Returns
 ///
 /// `Some(NaiveTime)` if parsing is successful, `None` otherwise.
-///
-/// # Examples
-///
-/// ```
-/// # use chrono::NaiveTime;
-/// # use lgg_core::parse_input::parse_time_token;
-/// // Using a keyword
-/// let noon = parse_time_token("noon").unwrap();
-/// assert_eq!(noon, NaiveTime::from_hms_opt(12, 0, 0).unwrap());
-///
-/// // Using 12-hour format
-/// let six_thirty_pm = parse_time_token("6:30 pm").unwrap();
-/// assert_eq!(six_thirty_pm, NaiveTime::from_hms_opt(18, 30, 0).unwrap());
-///
-/// // Using 24-hour format
-/// let three_oclock = parse_time_token("15").unwrap();
-/// assert_eq!(three_oclock, NaiveTime::from_hms_opt(15, 0, 0).unwrap());
-/// ```
 pub fn parse_time_token(s: &str) -> Option<NaiveTime> {
     if Keywords::matches(Keyword::Morning, s) {
         return NaiveTime::from_hms_opt(8, 0, 0);
@@ -593,16 +532,10 @@ mod tests {
 
         // Test parsing of each day of the week relative to the anchor
         let monday = parse_entry("monday: Task A", p_opts);
-        assert_eq!(
-            monday.date,
-            NaiveDate::from_ymd_opt(2025, 8, 18).unwrap()
-        );
+        assert_eq!(monday.date, NaiveDate::from_ymd_opt(2025, 8, 18).unwrap());
 
         let tuesday = parse_entry("tuesday: Task B", p_opts);
-        assert_eq!(
-            tuesday.date,
-            NaiveDate::from_ymd_opt(2025, 8, 19).unwrap()
-        );
+        assert_eq!(tuesday.date, NaiveDate::from_ymd_opt(2025, 8, 19).unwrap());
 
         // A day keyword matching the anchor date should return the anchor date
         let wednesday = parse_entry("wednesday: Task C", p_opts);
@@ -610,28 +543,16 @@ mod tests {
 
         // Days from the "previous week" should resolve correctly
         let thursday = parse_entry("thursday: Task D", p_opts);
-        assert_eq!(
-            thursday.date,
-            NaiveDate::from_ymd_opt(2025, 8, 14).unwrap()
-        );
+        assert_eq!(thursday.date, NaiveDate::from_ymd_opt(2025, 8, 14).unwrap());
 
         let friday = parse_entry("friday: Task E", p_opts);
-        assert_eq!(
-            friday.date,
-            NaiveDate::from_ymd_opt(2025, 8, 15).unwrap()
-        );
+        assert_eq!(friday.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
 
         let saturday = parse_entry("saturday: Task F", p_opts);
-        assert_eq!(
-            saturday.date,
-            NaiveDate::from_ymd_opt(2025, 8, 16).unwrap()
-        );
+        assert_eq!(saturday.date, NaiveDate::from_ymd_opt(2025, 8, 16).unwrap());
 
         let sunday = parse_entry("sunday: Task G", p_opts);
-        assert_eq!(
-            sunday.date,
-            NaiveDate::from_ymd_opt(2025, 8, 17).unwrap()
-        );
+        assert_eq!(sunday.date, NaiveDate::from_ymd_opt(2025, 8, 17).unwrap());
     }
 
     #[test]

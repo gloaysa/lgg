@@ -1,10 +1,7 @@
 use super::CliModeResult;
 use crate::{Cli, render::Renderer};
 use anyhow::Result;
-use lgg_core::{
-    Journal,
-    journal::{QueryError, QueryResult},
-};
+use lgg_core::{Journal, QueryError, QueryResult};
 
 pub fn read_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<CliModeResult> {
     let mut start_date: Option<&str> = None;

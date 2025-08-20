@@ -1,30 +1,14 @@
 //! Parses the content of a daily journal file into structured `Entry` objects.
-
-use crate::entry::Entry;
+use super::journal_entry::ParsedEntry;
 use chrono::{NaiveDate, NaiveTime};
 
 #[derive(Debug)]
 pub struct ParseResult {
-    pub entries: Vec<Entry>,
+    pub entries: Vec<ParsedEntry>,
     pub errors: Vec<String>,
 }
 
-/// Parses the entire content of a daily journal file.
-///
-/// This function acts as the main entry point for file parsing. It expects the file
-/// to have a specific format:
-/// - A mandatory header on the first line (e.g., `# Friday, 15 Aug 2025`).
-/// - Zero or more entry blocks, each starting with `## HH:MM - Title`.
-///
-/// # Arguments
-///
-/// * `content` - A string slice containing the full content of the journal file.
-///
-/// # Returns
-///
-/// A `ParseResult` containing a `Vec<Entry>` and `errors` in case some where found,
-/// if the file is empty or the header is malformed or a specific entry is invalid.
-pub fn parse_day_file(content: &str) -> ParseResult {
+pub fn parse_file_content(content: &str) -> ParseResult {
     let mut entries = Vec::new();
     let mut errors = Vec::new();
     let mut lines = content.lines();
@@ -65,7 +49,7 @@ pub fn parse_day_file(content: &str) -> ParseResult {
                     let title = heading[separator_pos + 3..].trim().to_string();
 
                     match NaiveTime::parse_from_str(time_str, "%H:%M") {
-                        Ok(time) => entries.push(Entry {
+                        Ok(time) => entries.push(ParsedEntry {
                             date,
                             time,
                             title,
@@ -86,7 +70,7 @@ pub fn parse_day_file(content: &str) -> ParseResult {
                 let time_str = block[..separator_pos].trim();
                 let title = block[separator_pos + 3..].trim().to_string();
                 if let Ok(time) = NaiveTime::parse_from_str(time_str, "%H:%M") {
-                    entries.push(Entry {
+                    entries.push(ParsedEntry {
                         date,
                         time,
                         title,
@@ -131,7 +115,7 @@ Another paragraph... @health
 
 ### Header 3 is valid
 "#;
-        let result = parse_day_file(content.trim());
+        let result = parse_file_content(content.trim());
         assert_eq!(result.entries.len(), 2);
 
         let expected_date = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
@@ -150,14 +134,14 @@ Another paragraph... @health
     #[test]
     fn parse_file_with_no_entries() {
         let content = "# Friday, 15 Aug 2025";
-        let result = parse_day_file(content);
+        let result = parse_file_content(content);
         assert!(result.entries.is_empty());
     }
 
     #[test]
     fn parse_file_with_malformed_header_fails() {
         let content = "# Not a date";
-        let result = parse_day_file(content);
+        let result = parse_file_content(content);
         assert!(result.errors.len() == 1);
         assert!(result.errors[0].contains("Invalid or missing H1 date header"));
     }
@@ -165,7 +149,7 @@ Another paragraph... @health
     #[test]
     fn parse_empty_file_fails() {
         let content = "";
-        let result = parse_day_file(content);
+        let result = parse_file_content(content);
         assert!(result.errors.len() == 1);
         assert!(result.errors[0].contains("Empty file"));
     }
@@ -182,7 +166,7 @@ Body...
 
 Body...
 "#;
-        let result = parse_day_file(content.trim());
+        let result = parse_file_content(content.trim());
         // It should gracefully skip the bad entry and parse the good one.
         assert_eq!(result.entries.len(), 1);
         assert_eq!(result.entries[0].title, "Good entry");
@@ -199,7 +183,7 @@ Body...
 
 With a body.
 "#;
-        let result = parse_day_file(content.trim());
+        let result = parse_file_content(content.trim());
         assert_eq!(result.entries.len(), 2);
         assert_eq!(result.entries[0].title, "Title only");
         assert!(result.entries[0].body.is_empty());

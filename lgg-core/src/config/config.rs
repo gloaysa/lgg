@@ -157,28 +157,25 @@ impl Config {
     }
 }
 
-#[cfg(test)]
-pub mod tests {
-    use std::path::Path;
+/// Test helper to create a default `Config` for testing purposes.
+///
+/// This is the single source of truth for test configuration.
+/// If you add a field to `Config`, you only need to update it here.
+pub fn mk_config(journal_dir: PathBuf) -> Config {
+    Config {
+        journal_dir,
+        editor: None,
+        default_time: NaiveTime::from_hms_opt(21, 0, 0).expect("valid time"),
+        journal_date_format: "%A, %d %b %Y".to_string(),
+        input_date_formats: ["%d/%m/%Y".to_string()].to_vec(),
+    }
+}
 
+#[cfg(test)]
+mod tests {
     use super::*;
     use crate::keywords::{Keyword, Keywords};
-    use chrono::NaiveTime;
-    use std::path::PathBuf;
-
-    /// Test helper to create a default `Config` for testing purposes.
-    ///
-    /// This is the single source of truth for test configuration.
-    /// If you add a field to `Config`, you only need to update it here.
-    pub(crate) fn mk_config(journal_dir: PathBuf) -> Config {
-        Config {
-            journal_dir,
-            editor: None,
-            default_time: NaiveTime::from_hms_opt(21, 0, 0).expect("valid time"),
-            journal_date_format: "%A, %d %b %Y".to_string(),
-            input_date_formats: ["%d/%m/%Y".to_string()].to_vec(),
-        }
-    }
+    use std::path::Path;
 
     #[test]
     fn candidates_prioritize_xdg_then_native() {

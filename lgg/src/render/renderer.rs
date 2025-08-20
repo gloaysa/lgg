@@ -1,10 +1,9 @@
-use lgg_core::journal::QueryResult;
+use super::theme::OneDark;
+use lgg_core::QueryResult;
 use termimad::{
     MadSkin,
     crossterm::style::{Color, Stylize},
 };
-
-use super::theme::OneDark;
 
 #[derive(Clone)]
 pub struct RenderOptions {

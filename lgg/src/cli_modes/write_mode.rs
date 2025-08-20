@@ -1,11 +1,11 @@
 use super::CliModeResult;
 use crate::{Cli, render::Renderer};
 use anyhow::Result;
-use lgg_core::{EntryRef, Journal};
+use lgg_core::{Journal, JournalEntry};
 use std::{fs, process::Command};
 
 pub fn write_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<CliModeResult> {
-    let new_entry: EntryRef;
+    let new_entry: JournalEntry;
     if !cli.text.is_empty() {
         let inline = cli.text.join(" ");
         new_entry = journal.create_entry(&inline, None)?;
