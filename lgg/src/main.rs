@@ -84,12 +84,10 @@ fn run() -> Result<()> {
         return Ok(());
     };
 
-    // Edit mode
     if let CliModeResult::Finish = edit_mode(&cli, &renderer, &journal)? {
         return Ok(());
     };
 
-    // Insert mode (default)
     if let CliModeResult::Finish = write_mode(&cli, &renderer, &journal)? {
         return Ok(());
     };
