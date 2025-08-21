@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>lgg</title>
+
+
+  <!-- Terminal window outline (red border, no fill) -->
+  <!-- stroke-width = 28, so inset the inner fill rect by 14 on each side -->
+  <rect x="96" y="160" width="832" height="704" rx="40" ry="40"
+        fill="none" stroke="#E06C75" stroke-width="28"/>
+
+  <!-- Inner fill, inset so it doesn't show under the border -->
+  <rect x="110" y="174" width="804" height="676" rx="26" ry="26" fill="#282C34"/>
+
+  <!-- Prompt text -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+     font-weight="700" font-size="200">
+    <text x="220" y="660" fill="#E5C07B">&gt;</text>
+    <text x="420" y="660" fill="#61AFEF">lgg</text>
+  </g>
+
+  <!-- Blinking cursor -->
+  <rect x="820" y="592" width="26" height="46" rx="5" fill="#61AFEF" opacity="0.85">
+    <animate attributeName="opacity" values="0.85;0.15;0.85" dur="1.2s" repeatCount="indefinite"/>
+  </rect>
+</svg>
