@@ -1,5 +1,6 @@
 mod cli_mode;
 mod edit_mode;
+mod editor_utils;
 mod read_mode;
 mod write_mode;
 

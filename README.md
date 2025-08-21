@@ -118,6 +118,10 @@ lgg --on 2025-08-15
 lgg --on monday
 ```
 
+### Editing Entries
+
+- Use the `--edit` flag to edit entries for a given date. Only works on single date searches (`today`, `monday`...).
+
 ## Configuration
 
 `lgg` can be configured via a `config.toml` file. It looks for this file in the standard user config directory for your OS:
@@ -185,13 +189,17 @@ The project is currently in the Minimum Viable Product (MVP) phase. To see what'
 
 ## FAQ
 
-- Why the name lgg?
+- **Why the name lgg?**
 
 * While most people like journaling, I like to do `logging`. While at work, when I finish a task I take a timestamp of it. The name `lgg` is the closest consonant abbreviation that also plays nice when writing it in the keyboard for quick access.
 
-- Why use this if `jrnl` exits?
+- **Why use this if `jrnl` exits?**
 
 * That's a very good question. [jrnl](https:://jrnl.sh) has been a fantastic tool and allowed me to ditch my physical notebook. I recommend you to use it instead of `lgg`. I created this tool because I want full markdown support. I want to write entries from my phone without writing an app for it, knowing that I will be able to access them with `lgg` later on (and hopefully in the future, with the --fix command, auto-format them). If that's not important to you and you want a battle tested tool, go for `jrnl`.
+
+- **How do you use it with your phone?**
+
+* I have this [shortcut](https://www.icloud.com/shortcuts/7fd8cdbbb7bb44038577c953388d593f "iOS Shorcut") to create formatted entries in my shared folder. To read and edit, I use a fantastic app called [Fountain](https://apps.apple.com/es/app/fountain-easy-screenwriting/id6504728966?l "Fountain app in App Store").
 
 ## Contributing
 

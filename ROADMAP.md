@@ -31,6 +31,7 @@ The MVP is focused on providing the essential features for a command-line journa
   - [x] Support for date keyword `[synonyms]`.
   - [x] Support for custom dates in journal entries and queries.
 - **Utility**:
+  - [x] **Localization**: Support for non-English date parsing and formatting.
   - [x] `lgg --path` command to print the journal's root directory.
 
 ### **In Progress / Next Steps**
@@ -52,4 +53,3 @@ Once the MVP is complete and stable, we will explore features from the original 
 - [ ] **`lgg fix` Command**: A utility to normalize and clean up manually edited files (e.g., add missing timestamps, fix formatting).
 - [ ] **Exporters**: Add options to export journal entries to different formats (JSON, consolidated Markdown, etc.).
 - [ ] **Improved Tag Support**: Enhanced parsing and indexing for `@tags`.
-- [ ] **Localization**: Support for non-English date parsing and formatting.
