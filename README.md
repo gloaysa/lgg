@@ -1,6 +1,14 @@
-# lgg
+<div align="center">
+<h1>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/icons/lgg-icon.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/icons/lgg-icon.svg">
+  <img alt="lgg" height="128" src="assets/icons/lgg-icon.svg">
+</picture>
+</h1>
+</div>
 
-A tiny, **human-first** command-line journal tool inspired by [jrnl.sh](https://jrnl.sh).
+A tiny, **human-first** command-line journal tool inspired by [jrnl.sh](https://jrnl.sh), written in rust.
 
 ## Mission
 
