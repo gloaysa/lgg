@@ -45,7 +45,7 @@ impl Renderer {
 
     pub fn print_entry_line(&self, entry: &JournalEntry) {
         let mut date = entry.date.to_string();
-        let mut time = entry.time.to_string();
+        let mut time = entry.time.format("%H:%M").to_string();
         let mut title = entry.title.to_string();
         let mut tags = String::new();
         if !entry.tags.is_empty() {

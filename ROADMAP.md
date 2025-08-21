@@ -53,3 +53,5 @@ Once the MVP is complete and stable, we will explore features from the original 
 - [ ] **`lgg fix` Command**: A utility to normalize and clean up manually edited files (e.g., add missing timestamps, fix formatting).
 - [ ] **Exporters**: Add options to export journal entries to different formats (JSON, consolidated Markdown, etc.).
 - [ ] **Improved Tag Support**: Enhanced parsing and indexing for `@tags`.
+- [ ] **Raycast extension**: No idea how Raycast extensions work, but will look into it. Would be nice to be able to create entries from it when not at the terminal. There's a work-around for it at the moment.
+- [ ] **Templates**: If the app gets some tracking and users want this feature.

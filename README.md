@@ -1,6 +1,6 @@
 # lgg
 
-A tiny, **human-first** command-line journaling tool inspired by [jrnl.sh](https://jrnl.sh).
+A tiny, **human-first** command-line journal tool inspired by [jrnl.sh](https://jrnl.sh).
 
 ## Mission
 
@@ -183,6 +183,10 @@ kino = "yesterday"
 # now you can do: kino a las 3: I had coffe yesterday at 3.
 ```
 
+## Tips and tricks
+
+You can find some [here](./tips_and_tricks.md).
+
 ## Roadmap
 
 The project is currently in the Minimum Viable Product (MVP) phase. To see what's done, what's in progress, and what's planned for the future, please see our official [**ROADMAP.md**](./ROADMAP.md).
@@ -195,7 +199,11 @@ The project is currently in the Minimum Viable Product (MVP) phase. To see what'
 
 - **Why use this if `jrnl` exits?**
 
-* That's a very good question. [jrnl](https:://jrnl.sh) has been a fantastic tool and allowed me to ditch my physical notebook. I recommend you to use it instead of `lgg`. I created this tool because I want full markdown support. I want to write entries from my phone without writing an app for it, knowing that I will be able to access them with `lgg` later on (and hopefully in the future, with the --fix command, auto-format them). If that's not important to you and you want a battle tested tool, go for `jrnl`.
+* That's a very good question. [jrnl](https:://jrnl.sh) has been a fantastic tool and allowed me to ditch my physical notebook. I recommend you to use it instead of `lgg`. I created this tool because I want full markdown support. I want to write entries from my phone, knowing that I will be able to access them with `lgg` later on (and hopefully in the future, with the --fix command, auto-format them). If that's not important to you and you want a battle tested tool, go for `jrnl`.
+
+* **How do you use it in your day to day?**
+
+- I like to make entries directly from my [Helix Editor](http://helix-editor.com "Helix website"), this way I never lose context of what I'm doing. I simply type `:! lgg Whatever it's I'm doing or I've finished.` and the entry is created. I also like doing quick searches for today's entries from the editor, in case I left a note to myself earlier in the day or the day before (remember, lgg has the keyword `tomorrow`, so you can do `tomorrow at noon: something to do.`). Once I finish implementing searching for tags, I will probably use them like I used them with jrnl: in meetings. It's very handy to quickly summon your notes about a topic (if you were kind to yourself in the past and properly tagged the topics).
 
 - **How do you use it with your phone?**
 
