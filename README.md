@@ -7,8 +7,6 @@
 </picture>
 </h1>
 
-</div><img src="assets/lgg-ios-icon-onedark.svg" alt="lgg logo" width="32"/>
-
 A tiny, **human-first** command-line journal tool inspired by [jrnl.sh](https://jrnl.sh), written in rust.
 
 ## Mission
