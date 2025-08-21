@@ -6,6 +6,7 @@
   <img alt="lgg" height="128" src="assets/icons/lgg-icon.svg">
 </picture>
 </h1>
+</div>
 
 A tiny, **human-first** command-line journal tool inspired by [jrnl.sh](https://jrnl.sh), written in rust.
 
