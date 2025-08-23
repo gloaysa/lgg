@@ -2,7 +2,7 @@ mod cli_modes;
 mod render;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use cli_modes::{CliModeResult, edit_mode, read_mode, write_mode};
 use lgg_core::Journal;
 use render::{ColorMode, RenderOptions, Renderer};
@@ -11,13 +11,28 @@ use std::process::ExitCode;
 
 /// lgg — Simple Markdown journal
 #[derive(Parser, Debug)]
-#[command(version, about)]
+#[command(
+    version,
+    about,
+    group(ArgGroup::new("read_mode").args(["on", "from", "to", "short", "tags"]).multiple(true)),
+    group(ArgGroup::new("edit_mode").args(["edit"])),
+    group(ArgGroup::new("write_mode").args(["text"])),
+    group(ArgGroup::new("solo").args(["path", "all_tags"]).conflicts_with_all(["read_mode", "edit_mode", "write_mode"])),
+)]
 struct Cli {
     /// Prints the journal root directory
-    #[arg(long, short, exclusive = true)]
+    #[arg(long, short)]
     path: bool,
+    /// Prints all the tags within all entries.
+    #[arg(long)]
+    all_tags: bool,
+    /// Control ANSI colors in output.
+    /// By default, colors are disabled when output is redirected (e.g with `>` or `|`).
+    #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
+    color: ColorMode,
+
     /// View entries on a specific date (e.g., `lgg --on yesterday`, `lgg --on 14/08/25`)
-    #[arg(long, conflicts_with_all=["from", "to"])]
+    #[arg(long)]
     on: Option<String>,
     /// View entries from, or on, this date (e.g., `lgg --from yesterday`, `lgg --from 14/08/25`)
     #[arg(long, conflicts_with = "on")]
@@ -25,20 +40,18 @@ struct Cli {
     /// View entries on a specific date (e.g., `yesterday`, `2025-08-15`)
     #[arg(long, conflicts_with = "on", requires = "from")]
     to: Option<String>,
-    /// Opens your $EDITOR with a found day file. Only works on single day searches.
-    /// eg. `lgg --edit yesterday`
-    #[arg(long, short)]
-    edit: Option<String>,
     /// Only shows the date and titles of searched entries.
     #[arg(long, short)]
     short: bool,
     /// Search for entries with the given tags (e.g., `lgg --tags dogs cats`)
     #[arg(long, short, num_args(1..))]
     tags: Option<Vec<String>>,
-    /// Control ANSI colors in output.
-    /// By default, colors are disabled when output is redirected (e.g with `>` or `|`).
-    #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
-    color: ColorMode,
+
+    /// Opens your $EDITOR with a found day file. Only works on single day searches.
+    /// eg. `lgg --edit yesterday`
+    #[arg(long, short)]
+    edit: Option<String>,
+
     /// Free text for insert mode (e.g., `lgg yesterday: Title. Body`).
     #[arg(exclusive = true)]
     text: Vec<String>,

@@ -1,12 +1,18 @@
 use super::CliModeResult;
 use crate::{Cli, render::Renderer};
 use anyhow::Result;
-use lgg_core::{Journal, QueryError, QueryResult, ReadEntriesOptions};
+use lgg_core::{Journal, QueryError, QueryResult, QueryTagsResult, ReadEntriesOptions};
 
 pub fn read_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<CliModeResult> {
     let mut start_date: Option<&str> = None;
     let mut end_date: Option<&str> = None;
     let mut tags: Option<Vec<String>> = None;
+
+    if cli.all_tags {
+        let tags = journal.search_all_tags();
+        print_tags(renderer, tags);
+        return Ok(CliModeResult::Finish);
+    }
 
     if let Some(on) = &cli.on {
         start_date = Some(on);
@@ -53,17 +59,33 @@ fn print_entries(renderer: &Renderer, result: QueryResult) {
         renderer.print_entries(&result);
     }
     if !result.errors.is_empty() {
-        renderer.print_md("\n# Errors:");
-        for error in result.errors {
-            match error {
-                QueryError::FileError { path, error } => {
-                    let message = format!("* Could not process '{}': {}", path.display(), error);
-                    renderer.print_md(&message);
-                }
-                QueryError::InvalidDate { input, error } => {
-                    let message = format!("* Could not process '{}': {}", input, error);
-                    renderer.print_md(&message);
-                }
+        print_errors(renderer, result.errors);
+    }
+}
+
+fn print_tags(renderer: &Renderer, result: QueryTagsResult) {
+    if result.tags.is_empty() {
+        renderer.print_info(&format!("No tags found"));
+    } else {
+        renderer.print_info(&format!("{} unique tags found.", result.tags.len()));
+        renderer.print_tags(&result.tags);
+    }
+    if !result.errors.is_empty() {
+        print_errors(renderer, result.errors);
+    }
+}
+
+fn print_errors(renderer: &Renderer, errors: Vec<QueryError>) {
+    renderer.print_md("\n# Errors:");
+    for error in errors {
+        match error {
+            QueryError::FileError { path, error } => {
+                let message = format!("* Could not process '{}': {}", path.display(), error);
+                renderer.print_md(&message);
+            }
+            QueryError::InvalidDate { input, error } => {
+                let message = format!("* Could not process '{}': {}", input, error);
+                renderer.print_md(&message);
             }
         }
     }

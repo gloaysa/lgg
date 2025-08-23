@@ -10,6 +10,7 @@ use crate::config::Config;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 use chrono::{Local, NaiveDate};
+use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
@@ -28,6 +29,12 @@ pub enum QueryError {
 #[derive(Debug)]
 pub struct QueryResult {
     pub entries: Vec<JournalEntry>,
+    pub errors: Vec<QueryError>,
+}
+
+#[derive(Debug)]
+pub struct QueryTagsResult {
+    pub tags: Vec<String>,
     pub errors: Vec<QueryError>,
 }
 
@@ -202,6 +209,31 @@ impl Journal {
         }
 
         QueryResult { entries, errors }
+    }
+
+    pub fn search_all_tags(&self) -> QueryTagsResult {
+        let mut tags: Vec<String> = Vec::new();
+        let mut errors = Vec::new();
+
+        if let Ok(files) = scan_dir_for_md_files(&self.config.journal_dir) {
+            for file in files {
+                let parse_result = self.parse_file(&file);
+                for entry in parse_result.entries {
+                    tags.extend(entry.tags);
+                }
+                errors.extend(parse_result.errors);
+            }
+        }
+
+        tags = tags
+            .iter()
+            .map(|mat| mat.as_str().to_string().trim().to_ascii_lowercase())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        tags.sort();
+
+        QueryTagsResult { tags, errors }
     }
 
     fn search_all_files(&self) -> QueryResult {
@@ -484,6 +516,27 @@ mod tests {
         assert_eq!(results.entries[2].tags.len(), 2);
         assert!(results.entries[2].tags.contains(&"@future".to_string()));
         assert!(results.entries[2].tags.contains(&"@double_tag".to_string()));
+    }
+
+    #[test]
+    fn find_all_tags() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // A day in 2025
+        let (j, _tmp) = mk_journal_with_default(Some(anchor));
+
+        j.create_entry("27/07/2020: Day in the past with @past tag.")
+            .unwrap();
+        j.create_entry("27/07/2048: Day way in the future with @future. Has @double_tag in body.")
+            .unwrap();
+        j.create_entry("yesterday: Has a tag in body. This is another @double_tag")
+            .unwrap();
+
+        let results = j.search_all_tags();
+        assert!(results.errors.is_empty());
+        assert_eq!(results.tags.len(), 3);
+
+        assert!(results.tags.contains(&"@past".to_string()));
+        assert!(results.tags.contains(&"@double_tag".to_string()));
+        assert!(results.tags.contains(&"@future".to_string()));
     }
 
     #[test]

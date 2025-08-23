@@ -37,9 +37,11 @@ impl Renderer {
     }
 
     pub fn print_info(&self, message: &str) {
+        let md = format!("|-|\n| {message} |\n|-|\n");
         if self.opts.use_color {
-            let md = format!("|-|\n| {message} |\n|-|\n");
-            self.skin.print_text(&md);
+            self.print_md(&md);
+        } else {
+            println!("{}", message);
         }
     }
 
@@ -47,25 +49,24 @@ impl Renderer {
         let mut date = entry.date.to_string();
         let mut time = entry.time.format("%H:%M").to_string();
         let mut title = entry.title.to_string();
-        let mut tags = String::new();
-        if !entry.tags.is_empty() {
-            tags = format!("[{}], ", entry.tags.join(", "));
-        }
+
+        let tags = if entry.tags.is_empty() {
+            String::new()
+        } else if self.opts.use_color {
+            let colored_tags = print_colored_list(&entry.tags);
+            format!("[{}]", colored_tags.join(" - "))
+        } else {
+            format!("[{}]", entry.tags.join(" - "))
+        };
         if self.opts.use_color {
             date = date.with(Color::Cyan).to_string();
             time = time.with(Color::Blue).to_string();
             title = title.with(Color::Yellow).to_string();
-            tags = tags.with(Color::Green).to_string();
         }
         println!("{} {} - {} {}", date, time, title, tags);
     }
 
     pub fn print_entries<'a>(&self, result: &QueryResult) {
-        if result.entries.is_empty() {
-            self.print_info("No entries found.");
-            return;
-        }
-
         for (i, entry) in result.entries.iter().enumerate() {
             let date = entry.date.format(&self.opts.date_format).to_string();
             let time = entry.time.format("%H:%M").to_string();
@@ -107,9 +108,55 @@ impl Renderer {
             }
         }
     }
+
+    pub fn print_tags(&self, tags: &Vec<String>) {
+        let tags = if tags.is_empty() {
+            String::new()
+        } else if self.opts.use_color {
+            let colored_tags = print_colored_list(&tags);
+            format!("{}", colored_tags.join(" - "))
+        } else {
+            format!("{}", tags.join(" - "))
+        };
+        println!("{}", tags);
+    }
 }
 
 fn highlight_tags(body: &str) -> String {
     let re = regex::Regex::new(r"(?m)(^|\s)@([A-Za-z0-9_][\w-]*)").unwrap();
     re.replace_all(body, "$1`@$2`").to_string()
+}
+
+pub fn print_colored_list(values: &Vec<String>) -> Vec<String> {
+    values.iter().map(|v| colorize_value(v)).collect()
+}
+
+fn colorize_value(val: &str) -> String {
+    let palette = [
+        Color::Red,
+        Color::DarkRed,
+        Color::Green,
+        Color::DarkGreen,
+        Color::Yellow,
+        Color::DarkYellow,
+        Color::Blue,
+        Color::DarkBlue,
+        Color::Magenta,
+        Color::DarkMagenta,
+        Color::Cyan,
+        Color::DarkCyan,
+        Color::Grey,
+    ];
+
+    fn stable_index(s: &str, modulo: usize) -> usize {
+        let mut h: u64 = 0xcbf29ce484222325;
+        for b in s.as_bytes() {
+            h ^= *b as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+        (h as usize) % modulo
+    }
+
+    let idx = stable_index(val, palette.len());
+    format!("{}", val.with(palette[idx]))
 }

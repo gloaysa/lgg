@@ -6,5 +6,5 @@ mod parse_entries;
 mod parse_input;
 mod path_utils;
 
-pub use journal::{Journal, QueryError, QueryResult, ReadEntriesOptions};
+pub use journal::{Journal, QueryError, QueryResult, QueryTagsResult, ReadEntriesOptions};
 pub use journal_entry::JournalEntry;
