@@ -14,15 +14,6 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 
-/// The central struct for all journal operations.
-///
-/// An instance of `Journal` holds the configuration and provides methods for
-/// reading from and writing to the journal files.
-#[derive(Debug)]
-pub struct Journal {
-    pub config: Config,
-}
-
 /// Represents a non-critical issue that occurred during a query.
 ///
 /// This is used to report problems (e.g., malformed files, invalid input)
@@ -40,6 +31,21 @@ pub struct QueryResult {
     pub errors: Vec<QueryError>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct ReadEntriesOptions<'a> {
+    pub start_date: Option<&'a str>,
+    pub end_date: Option<&'a str>,
+    pub tags: Option<Vec<String>>,
+}
+
+/// The central struct for all journal operations.
+///
+/// An instance of `Journal` holds the configuration and provides methods for
+/// reading from and writing to the journal files.
+#[derive(Debug)]
+pub struct Journal {
+    pub config: Config,
+}
 impl Journal {
     /// Creates a new `Journal` instance, loading configuration from standard paths.
     pub fn new() -> Result<Self> {
@@ -69,11 +75,7 @@ impl Journal {
     /// * `input` - a string with the user's input (eg 'yesterday: I did some coding.').
     /// * `reference_date` - Optional argument that will allow to modify the date of reference for
     /// relatives dates (yesterday, tomorrow...)
-    pub fn create_entry(
-        &self,
-        input: &str,
-        reference_date: Option<NaiveDate>,
-    ) -> Result<JournalEntry> {
+    pub fn create_entry(&self, input: &str) -> Result<JournalEntry> {
         let format_strs: Vec<&str> = self
             .config
             .input_date_formats
@@ -81,7 +83,7 @@ impl Journal {
             .map(AsRef::as_ref)
             .collect();
         let opts = ParseOptions {
-            reference_date,
+            reference_date: Some(self.config.reference_date),
             formats: Some(&format_strs),
         };
         let parsed_input = parse_raw_user_input(input, Some(opts));
@@ -172,14 +174,17 @@ impl Journal {
     /// * `date_str` - A string that can be parsed into a date (e.g., "yesterday", "2025-08-15").
     /// * `reference_date` - Optional argument that will allow to modify the date of reference for
     /// relatives dates (yesterday, tomorrow...)
-    pub fn read_entries(
-        &self,
-        start_date: &str,
-        end_date: Option<&str>,
-        reference_date: Option<NaiveDate>,
-    ) -> QueryResult {
-        let mut entries = Vec::new();
-        let mut errors = Vec::new();
+    pub fn read_entries(&self, options: ReadEntriesOptions) -> QueryResult {
+        if let Some(start_date) = options.start_date {
+            return self.search_files_by_date(start_date, options.end_date);
+        } else {
+            // TODO: here we are going to search in all the files
+            return self
+                .search_files_by_date(&Local::now().date_naive().to_string(), options.end_date);
+        }
+    }
+
+    fn search_files_by_date(&self, start_date: &str, end_date: Option<&str>) -> QueryResult {
         let format_strs: Vec<&str> = self
             .config
             .input_date_formats
@@ -187,9 +192,11 @@ impl Journal {
             .map(AsRef::as_ref)
             .collect();
         let opts = ParseOptions {
-            reference_date,
+            reference_date: Some(self.config.reference_date),
             formats: Some(&format_strs),
         };
+        let mut entries = Vec::new();
+        let mut errors = Vec::new();
 
         if let Some(date) = parse_date_token(start_date, end_date, Some(opts)) {
             match date {
@@ -210,6 +217,7 @@ impl Journal {
                 error: "Not a valid date or keyword.".to_string(),
             });
         }
+
         QueryResult { entries, errors }
     }
 
@@ -307,18 +315,19 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
-    fn mk_journal_with_default() -> (Journal, tempfile::TempDir) {
+    fn mk_journal_with_default(reference_date: Option<NaiveDate>) -> (Journal, tempfile::TempDir) {
         let tmp = tempdir().unwrap();
         let root = tmp.path().join("lgg");
-        let cfg = mk_config(root);
-        let j = Journal::with_config(cfg).unwrap();
+        let config = mk_config(root, reference_date);
+
+        let j = Journal::with_config(config).unwrap();
         (j, tmp)
     }
 
     #[test]
     fn save_entry_creates_day_file_and_appends() {
-        let (j, _tmp) = mk_journal_with_default();
-        let res = j.create_entry("Test entry. With body.", None).unwrap();
+        let (j, _tmp) = mk_journal_with_default(None);
+        let res = j.create_entry("Test entry. With body.").unwrap();
         let expected = day_path(&j.config.journal_dir, res.date);
         assert_eq!(res.path, expected);
         assert!(res.path.exists());
@@ -333,11 +342,15 @@ mod tests {
 
     #[test]
     fn read_entries_single_date_success() {
-        let (j, _tmp) = mk_journal_with_default();
-        let _ = j.create_entry("today: First entry.", None).unwrap();
-        let _ = j.create_entry("today: Second entry.", None).unwrap();
+        let (j, _tmp) = mk_journal_with_default(None);
+        let _ = j.create_entry("today: First entry.").unwrap();
+        let _ = j.create_entry("today: Second entry.").unwrap();
+        let options = ReadEntriesOptions {
+            start_date: Some("today"),
+            ..Default::default()
+        };
 
-        let result = j.read_entries("today", None, None);
+        let result = j.read_entries(options);
         assert!(result.errors.is_empty());
         assert_eq!(result.entries.len(), 2);
         assert_eq!(result.entries[0].title, "First entry.");
@@ -346,26 +359,29 @@ mod tests {
 
     #[test]
     fn read_entries_range_date_success() {
-        let (j, _tmp) = mk_journal_with_default();
-        println!("{}", j.config.journal_dir.as_os_str().display());
         let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // Monday
+        let (j, _tmp) = mk_journal_with_default(Some(anchor));
 
-        j.create_entry("27/07/2025: Previous week", Some(anchor))
-            .unwrap();
-        j.create_entry("saturday: First entry.", Some(anchor))
-            .unwrap();
-        j.create_entry("yesterday: Second entry!", Some(anchor))
-            .unwrap();
-        j.create_entry("today: This week?", Some(anchor)).unwrap();
-        j.create_entry("11/08/2025: Next week", Some(anchor))
-            .unwrap();
+        j.create_entry("27/07/2025: Previous week").unwrap();
+        j.create_entry("saturday: First entry.").unwrap();
+        j.create_entry("yesterday: Second entry!").unwrap();
+        j.create_entry("today: This week?").unwrap();
+        j.create_entry("11/08/2025: Next week").unwrap();
 
-        let last_week = j.read_entries("last week", None, Some(anchor));
+        let options = ReadEntriesOptions {
+            start_date: Some("last week"),
+            ..Default::default()
+        };
+        let last_week = j.read_entries(options);
         assert!(last_week.errors.is_empty());
         assert_eq!(last_week.entries.len(), 2);
         assert_eq!(last_week.entries[0].title, "First entry.");
         assert_eq!(last_week.entries[1].title, "Second entry!");
-        let this_week = j.read_entries("this week", None, Some(anchor));
+        let options = ReadEntriesOptions {
+            start_date: Some("this week"),
+            ..Default::default()
+        };
+        let this_week = j.read_entries(options);
         assert!(this_week.errors.is_empty());
         assert_eq!(this_week.entries.len(), 1);
         assert_eq!(this_week.entries[0].title, "This week?");
@@ -373,16 +389,24 @@ mod tests {
 
     #[test]
     fn read_entries_on_date_with_no_file() {
-        let (j, _tmp) = mk_journal_with_default();
-        let result = j.read_entries("yesterday", None, None);
+        let (j, _tmp) = mk_journal_with_default(None);
+        let options = ReadEntriesOptions {
+            start_date: Some("yesterday"),
+            ..Default::default()
+        };
+        let result = j.read_entries(options);
         assert!(result.errors.is_empty());
         assert!(result.entries.is_empty());
     }
 
     #[test]
     fn read_entries_with_invalid_date_string() {
-        let (j, _tmp) = mk_journal_with_default();
-        let result = j.read_entries("not-a-date", None, None);
+        let (j, _tmp) = mk_journal_with_default(None);
+        let options = ReadEntriesOptions {
+            start_date: Some("not-a-date"),
+            ..Default::default()
+        };
+        let result = j.read_entries(options);
         assert!(result.entries.is_empty());
         assert_eq!(result.errors.len(), 1);
         assert!(matches!(&result.errors[0], QueryError::InvalidDate { .. }));
@@ -390,13 +414,17 @@ mod tests {
 
     #[test]
     fn read_entries_with_malformed_file() {
-        let (j, _tmp) = mk_journal_with_default();
+        let (j, _tmp) = mk_journal_with_default(None);
         let date = Local::now().date_naive();
         let path = day_path(&j.config.journal_dir, date);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, "this file is not valid").unwrap();
 
-        let result = j.read_entries("today", None, None);
+        let options = ReadEntriesOptions {
+            start_date: Some("today"),
+            ..Default::default()
+        };
+        let result = j.read_entries(options);
         assert!(result.entries.is_empty());
         assert_eq!(result.errors.len(), 1);
         assert!(matches!(&result.errors[0], QueryError::FileError { .. }));

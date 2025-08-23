@@ -13,21 +13,12 @@ pub enum DateFilter {
 }
 
 /// Configuration options for parsing functions.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct ParseOptions<'a> {
     /// The date to use as "today" for relative keywords.
     pub reference_date: Option<NaiveDate>,
     /// A slice of `chrono` format strings to try for parsing dates.
     pub formats: Option<&'a [&'a str]>,
-}
-
-impl Default for ParseOptions<'_> {
-    fn default() -> Self {
-        Self {
-            reference_date: None,
-            formats: None,
-        }
-    }
 }
 
 /// Parsed result of inline text (e.g., "yesterday: Title. Body").

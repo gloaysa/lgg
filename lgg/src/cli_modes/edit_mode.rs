@@ -4,11 +4,15 @@ use super::{
 };
 use crate::{Cli, render::Renderer};
 use anyhow::Result;
-use lgg_core::Journal;
+use lgg_core::{Journal, ReadEntriesOptions};
 
 pub fn edit_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<CliModeResult> {
     if let Some(start_date) = &cli.edit {
-        let results = journal.read_entries(&start_date, None, None);
+        let options = ReadEntriesOptions {
+            start_date: Some(start_date),
+            ..Default::default()
+        };
+        let results = journal.read_entries(options);
 
         match results.entries.first() {
             Some(entry) => {

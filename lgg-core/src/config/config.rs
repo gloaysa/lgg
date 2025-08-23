@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::NaiveTime;
+use chrono::{Local, NaiveDate, NaiveTime};
 use directories::BaseDirs;
 use serde::Deserialize;
 use std::{collections::HashMap, fs, path::PathBuf};
@@ -16,7 +16,10 @@ pub struct Config {
     /// Valid format is "%H:%M" (e.g. 08:40 or 16:33). Default is 21:00.
     pub default_time: NaiveTime,
     pub journal_date_format: String,
+    /// A slice of `chrono` format strings to try for parsing dates.
     pub input_date_formats: Vec<String>,
+    /// The date to use as "today" for relative keywords.
+    pub reference_date: NaiveDate,
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,6 +76,7 @@ impl Config {
             default_time,
             journal_date_format: date_format,
             input_date_formats,
+            reference_date: Local::now().date_naive(),
         })
     }
 
@@ -161,11 +165,12 @@ impl Config {
 ///
 /// This is the single source of truth for test configuration.
 /// If you add a field to `Config`, you only need to update it here.
-pub fn mk_config(journal_dir: PathBuf) -> Config {
+pub fn mk_config(journal_dir: PathBuf, reference_date: Option<NaiveDate>) -> Config {
     Config {
         journal_dir,
         editor: None,
         default_time: NaiveTime::from_hms_opt(21, 0, 0).expect("valid time"),
+        reference_date: reference_date.unwrap_or(Local::now().date_naive()),
         journal_date_format: "%A, %d %b %Y".to_string(),
         input_date_formats: ["%d/%m/%Y".to_string()].to_vec(),
     }

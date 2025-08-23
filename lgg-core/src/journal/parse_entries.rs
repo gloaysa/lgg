@@ -105,7 +105,8 @@ fn parse_date_from_header_line(line: &str) -> Option<NaiveDate> {
 /// Matches one or more letters, numbers, or underscores.
 fn extract_tags(text: &str) -> Vec<String> {
     let re = Regex::new(r"[@#]\w+").unwrap();
-    let mut tags: Vec<String> = re.find_iter(text)
+    let mut tags: Vec<String> = re
+        .find_iter(text)
         .map(|mat| mat.as_str().to_string())
         .collect::<HashSet<_>>()
         .into_iter()

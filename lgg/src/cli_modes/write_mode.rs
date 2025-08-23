@@ -10,7 +10,7 @@ pub fn write_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<C
     let new_entry: JournalEntry;
     if !cli.text.is_empty() {
         let inline = cli.text.join(" ");
-        new_entry = journal.create_entry(&inline, None)?;
+        new_entry = journal.create_entry(&inline)?;
     } else {
         let editor = resolve_editor(&journal)?;
         let input = create_editor_buffer(&editor)?;
@@ -19,7 +19,7 @@ pub fn write_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<C
             renderer.print_info(&format!("No entry to save, because no text was received."));
             return Ok(CliModeResult::Finish);
         }
-        new_entry = journal.create_entry(&trimmed, None)?;
+        new_entry = journal.create_entry(&trimmed)?;
     }
     renderer.print_info(&format!("Added new entry to {}", new_entry.path.display()));
     renderer.print_entry_line(&new_entry);
