@@ -5,7 +5,7 @@ use super::journal_entry::JournalEntry;
 use super::parse_entries::parse_file_content;
 use super::parse_input::DateFilter::{Range, Single};
 use super::parse_input::{ParseOptions, parse_date_token, parse_raw_user_input};
-use super::path_utils::day_path;
+use super::path_utils::{day_path, scan_dir_for_md_files};
 use crate::config::Config;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
@@ -35,7 +35,7 @@ pub struct QueryResult {
 pub struct ReadEntriesOptions<'a> {
     pub start_date: Option<&'a str>,
     pub end_date: Option<&'a str>,
-    pub tags: Option<Vec<String>>,
+    pub tags: Option<&'a Vec<String>>,
 }
 
 /// The central struct for all journal operations.
@@ -142,7 +142,7 @@ impl Journal {
             }
 
             result.entries.push(new_entry);
-            result.entries.sort_by_key(|e| e.time);
+            result.entries.sort_by_key(|e| e.date);
             let mut new_content = header;
             for entry in result.entries {
                 let block = format_entry_block(&entry.title, &entry.body, Some(entry.time));
@@ -174,14 +174,49 @@ impl Journal {
     /// * `date_str` - A string that can be parsed into a date (e.g., "yesterday", "2025-08-15").
     /// * `reference_date` - Optional argument that will allow to modify the date of reference for
     /// relatives dates (yesterday, tomorrow...)
-    pub fn read_entries(&self, options: ReadEntriesOptions) -> QueryResult {
+    pub fn read_entries(&self, options: &ReadEntriesOptions) -> QueryResult {
+        let mut entries = Vec::new();
+        let mut errors = Vec::new();
         if let Some(start_date) = options.start_date {
-            return self.search_files_by_date(start_date, options.end_date);
+            let results = self.search_files_by_date(start_date, options.end_date);
+            entries.extend(results.entries);
+            errors.extend(results.errors);
         } else {
-            // TODO: here we are going to search in all the files
-            return self
-                .search_files_by_date(&Local::now().date_naive().to_string(), options.end_date);
+            let results = self.search_all_files();
+            entries.extend(results.entries);
+            errors.extend(results.errors);
         }
+
+        entries.sort_by_key(|k| k.date);
+
+        if let Some(tags) = &options.tags {
+            let found_tags: Vec<String> = tags
+                .into_iter()
+                .map(|t| t.trim().to_ascii_lowercase())
+                .collect();
+
+            entries = entries
+                .into_iter()
+                .filter(|e| found_tags.iter().any(|t| e.tags.contains(t)))
+                .collect();
+        }
+
+        QueryResult { entries, errors }
+    }
+
+    fn search_all_files(&self) -> QueryResult {
+        let mut entries = Vec::new();
+        let mut errors = Vec::new();
+
+        if let Ok(files) = scan_dir_for_md_files(&self.config.journal_dir) {
+            for file in files {
+                let parse_result = self.parse_file(&file);
+                entries.extend(parse_result.entries);
+                errors.extend(parse_result.errors);
+            }
+        }
+
+        QueryResult { entries, errors }
     }
 
     fn search_files_by_date(&self, start_date: &str, end_date: Option<&str>) -> QueryResult {
@@ -350,7 +385,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = j.read_entries(options);
+        let result = j.read_entries(&options);
         assert!(result.errors.is_empty());
         assert_eq!(result.entries.len(), 2);
         assert_eq!(result.entries[0].title, "First entry.");
@@ -372,7 +407,7 @@ mod tests {
             start_date: Some("last week"),
             ..Default::default()
         };
-        let last_week = j.read_entries(options);
+        let last_week = j.read_entries(&options);
         assert!(last_week.errors.is_empty());
         assert_eq!(last_week.entries.len(), 2);
         assert_eq!(last_week.entries[0].title, "First entry.");
@@ -381,10 +416,74 @@ mod tests {
             start_date: Some("this week"),
             ..Default::default()
         };
-        let this_week = j.read_entries(options);
+        let this_week = j.read_entries(&options);
         assert!(this_week.errors.is_empty());
         assert_eq!(this_week.entries.len(), 1);
         assert_eq!(this_week.entries[0].title, "This week?");
+    }
+
+    #[test]
+    fn read_entries_with_tag_and_date_filter() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // Monday
+        let (j, _tmp) = mk_journal_with_default(Some(anchor));
+        let expected_tags: Vec<String> = vec!["@test".to_string()];
+
+        j.create_entry("27/07/2025: Previous week with @test tag")
+            .unwrap();
+        j.create_entry("today: This week with @test tag").unwrap();
+        j.create_entry("tomorrow: This week with @test tag too.")
+            .unwrap();
+        j.create_entry("11/08/2025: Next week with @test tag.")
+            .unwrap();
+
+        let options = ReadEntriesOptions {
+            start_date: Some("this week"),
+            tags: Some(&expected_tags),
+            ..Default::default()
+        };
+        let results = j.read_entries(&options);
+        assert!(results.errors.is_empty());
+        assert_eq!(results.entries.len(), 2);
+
+        assert_eq!(results.entries[0].tags.len(), 1);
+        assert!(results.entries[0].tags.contains(&"@test".to_string()));
+    }
+
+    #[test]
+    fn read_all_files_to_find_tags() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // A day in 2025
+        let (j, _tmp) = mk_journal_with_default(Some(anchor));
+        let expected_tags: Vec<String> = vec![
+            "@future".to_string(),
+            "@past".to_string(),
+            "@double_tag".to_string(),
+        ];
+
+        j.create_entry("27/07/2020: Day in the past with @past tag.")
+            .unwrap();
+        j.create_entry("27/07/2048: Day way in the future with @future. Has @double_tag in body.")
+            .unwrap();
+        j.create_entry("yesterday: Has a tag in body. This is another @double_tag")
+            .unwrap();
+        j.create_entry("today: No tag.").unwrap();
+
+        let options = ReadEntriesOptions {
+            tags: Some(&expected_tags),
+            ..Default::default()
+        };
+        let results = j.read_entries(&options);
+        assert!(results.errors.is_empty());
+        assert_eq!(results.entries.len(), 3);
+
+        assert_eq!(results.entries[0].tags.len(), 1);
+        assert!(results.entries[0].tags.contains(&"@past".to_string()));
+
+        assert_eq!(results.entries[1].tags.len(), 1);
+        assert!(results.entries[1].tags.contains(&"@double_tag".to_string()));
+
+        assert_eq!(results.entries[2].tags.len(), 2);
+        assert!(results.entries[2].tags.contains(&"@future".to_string()));
+        assert!(results.entries[2].tags.contains(&"@double_tag".to_string()));
     }
 
     #[test]
@@ -394,7 +493,7 @@ mod tests {
             start_date: Some("yesterday"),
             ..Default::default()
         };
-        let result = j.read_entries(options);
+        let result = j.read_entries(&options);
         assert!(result.errors.is_empty());
         assert!(result.entries.is_empty());
     }
@@ -406,7 +505,7 @@ mod tests {
             start_date: Some("not-a-date"),
             ..Default::default()
         };
-        let result = j.read_entries(options);
+        let result = j.read_entries(&options);
         assert!(result.entries.is_empty());
         assert_eq!(result.errors.len(), 1);
         assert!(matches!(&result.errors[0], QueryError::InvalidDate { .. }));
@@ -424,12 +523,9 @@ mod tests {
             start_date: Some("today"),
             ..Default::default()
         };
-        let result = j.read_entries(options);
+        let result = j.read_entries(&options);
         assert!(result.entries.is_empty());
         assert_eq!(result.errors.len(), 1);
         assert!(matches!(&result.errors[0], QueryError::FileError { .. }));
     }
-
-    #[test]
-    fn header_formats_readably() {}
 }

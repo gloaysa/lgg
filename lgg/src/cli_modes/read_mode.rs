@@ -6,6 +6,7 @@ use lgg_core::{Journal, QueryError, QueryResult, ReadEntriesOptions};
 pub fn read_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<CliModeResult> {
     let mut start_date: Option<&str> = None;
     let mut end_date: Option<&str> = None;
+    let mut tags: Option<Vec<String>> = None;
 
     if let Some(on) = &cli.on {
         start_date = Some(on);
@@ -25,30 +26,28 @@ pub fn read_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<Cl
             }
         }
     }
-
-    if let Some(found_tags) = &cli.tags {
-        renderer.print_info(&format!(
-            "You are searching for tags: [{}] This feature is a WIP.",
-            found_tags.join(" ")
-        ));
+    if let Some(has_tags) = &cli.tags {
+        tags = Some(has_tags.to_vec());
     }
 
-    if let Some(start_date) = start_date {
-        let options = ReadEntriesOptions {
-            start_date: Some(start_date),
-            end_date,
-            ..Default::default()
-        };
-        let result = journal.read_entries(options);
-        print_entries(renderer, result, &start_date);
-        return Ok(CliModeResult::Finish);
+    if start_date.is_none() && tags.is_none() {
+        return Ok(CliModeResult::NothingToDo);
     }
-    Ok(CliModeResult::NothingToDo)
+
+    let options = ReadEntriesOptions {
+        start_date,
+        end_date,
+        tags: cli.tags.as_ref(),
+        ..Default::default()
+    };
+    let result = journal.read_entries(&options);
+    print_entries(renderer, result);
+    Ok(CliModeResult::Finish)
 }
 
-fn print_entries(renderer: &Renderer, result: QueryResult, date_str: &str) {
+fn print_entries(renderer: &Renderer, result: QueryResult) {
     if result.entries.is_empty() {
-        renderer.print_info(&format!("No entries found for {}.", date_str));
+        renderer.print_info(&format!("No entries found"));
     } else {
         renderer.print_info(&format!("{} entries found.", result.entries.len()));
         renderer.print_entries(&result);

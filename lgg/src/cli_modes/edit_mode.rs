@@ -12,7 +12,7 @@ pub fn edit_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<Cl
             start_date: Some(start_date),
             ..Default::default()
         };
-        let results = journal.read_entries(options);
+        let results = journal.read_entries(&options);
 
         match results.entries.first() {
             Some(entry) => {

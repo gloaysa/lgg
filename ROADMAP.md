@@ -19,6 +19,7 @@ The MVP is focused on providing the essential features for a command-line journa
     - `--from <date>`
     - `--to <date>` / `--until <date>`
     - `--short` displays the entry without the body.
+    - `--tag <tag1 tag2>` displays all entries with the searched tags.
   - [x] Implement a resilient query system that returns warnings for malformed files instead of crashing.
   - [x] Better UI on Reader mode, parsing Markdown.
 - **Storage**:
@@ -41,7 +42,6 @@ These are the highest-priority features required to complete the MVP.
 - **Expand Reading & Filtering Mode**:
   - [ ] Implement remaining CLI flags for filtering entries:
     - `--contains <text>`
-    - `--tag <tag>`
     - `-n`/`--limit <count>`
     - `--reverse`
 

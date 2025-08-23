@@ -107,7 +107,7 @@ fn extract_tags(text: &str) -> Vec<String> {
     let re = Regex::new(r"[@#]\w+").unwrap();
     let mut tags: Vec<String> = re
         .find_iter(text)
-        .map(|mat| mat.as_str().to_string())
+        .map(|mat| mat.as_str().to_string().trim().to_ascii_lowercase())
         .collect::<HashSet<_>>()
         .into_iter()
         .collect();

@@ -107,6 +107,7 @@ You can use the following keywords (and user-defined synonyms) to specify dates 
 - Use the `--on` flag to view all entries for a given date.
 - Use the `--from` flag to view all entries from the give day til today.
 - Use the `--to` flag in combination with `--from` to view all entries in a range.
+- Use the `--tags` flag to search for one or more tags within all your entries.
 
 > [!NOTE] The current implementation assumes the user won't try and crashed their own computer.
 > If you provide a `--from` flag with a date very away in the past (01/01/01), you'll be waiting a while.
@@ -124,6 +125,9 @@ lgg --on 2025-08-15
 # You can use the days of the week too,
 # it will fallback to the closest day in the past
 lgg --on monday
+
+## Searching for entries from this week with specific tag
+lgg --from 'this week' --tags @work
 ```
 
 ### Editing Entries
@@ -211,7 +215,7 @@ The project is currently in the Minimum Viable Product (MVP) phase. To see what'
 
 * **How do you use it in your day to day?**
 
-- I like to make entries directly from my [Helix Editor](http://helix-editor.com "Helix website"), this way I never lose context of what I'm doing. I simply type `:! lgg Whatever it's I'm doing or I've finished.` and the entry is created. I also like doing quick searches for today's entries from the editor, in case I left a note to myself earlier in the day or the day before (remember, lgg has the keyword `tomorrow`, so you can do `tomorrow at noon: something to do.`). Once I finish implementing searching for tags, I will probably use them like I used them with jrnl: in meetings. It's very handy to quickly summon your notes about a topic (if you were kind to yourself in the past and properly tagged the topics).
+- I like to make entries directly from my [Helix Editor](http://helix-editor.com "Helix website"), this way I never lose context of what I'm doing. I simply type `:! lgg Whatever it's I'm doing or I've finished.` and the entry is created. I also like doing quick searches for today's entries from the editor, in case I left a note to myself earlier in the day or the day before (remember, lgg has the keyword `tomorrow`, so you can do `tomorrow at noon: something to do.`). Searching tags in meetings: it's very handy to quickly summon your notes about a topic (if you were kind to yourself in the past and properly tagged the topics).
 
 - **How do you use it with your phone?**
 
