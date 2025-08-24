@@ -108,8 +108,10 @@ You can use the following keywords (and user-defined synonyms) to specify dates 
 - Use the `--from` flag to view all entries from the give day til today.
 - Use the `--to` flag in combination with `--from` to view all entries in a range.
 - Use the `--tags` flag to search for one or more tags within all your entries.
+- Use the `--all-tags` flag to list all the tags within your entries.
+- Use `--style [long][short]` to display your entries with/without body. Default is `long`. It can also be set with an env variable `LGG_STYLE`, so you can change the default.
 
-> [!NOTE] The current implementation assumes the user won't try and crashed their own computer.
+> [!NOTE] The current implementation assumes the user won't try and crash their own computer.
 > If you provide a `--from` flag with a date very away in the past (01/01/01), you'll be waiting a while.
 
 ```sh
@@ -142,7 +144,7 @@ lgg --from 'this week' --tags @work
 - **macOS**: `~/Library/Application Support/lgg/config.toml` or `~/.config/lgg/config.toml`
 - **Windows**: `%APPDATA%\lgg\config.toml`
 
-> [!NOTE] You can use the configuration to extend the behaviour of lgg, and even translate it to your language. For that, use the `synonyms` configuration and look at the [keywords](#available-keywords) that can be extended.
+> [!NOTE] You can use the configuration to extend the behavior of lgg, and even translate it to your language. For that, use the `synonyms` configuration and look at the [keywords](#available-keywords) that can be extended.
 
 Here are all the available options with their defaults:
 

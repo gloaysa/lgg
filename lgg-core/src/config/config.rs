@@ -6,6 +6,20 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use crate::keywords::Keywords;
 
+#[derive(Debug, Deserialize)]
+struct ConfigFile {
+    journal_dir: Option<PathBuf>,
+    editor: Option<String>,
+    default_time: Option<String>,
+    journal_date_format: Option<String>,
+    input_date_formats: Option<Vec<String>>,
+    /// Optional table:
+    /// [synonyms]
+    /// ytd = "yesterday"
+    /// ayer = "yesterday"
+    synonyms: Option<HashMap<String, String>>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     /// Absolute directory where daily Markdown files live.
@@ -20,20 +34,6 @@ pub struct Config {
     pub input_date_formats: Vec<String>,
     /// The date to use as "today" for relative keywords.
     pub reference_date: NaiveDate,
-}
-
-#[derive(Debug, Deserialize)]
-struct ConfigFile {
-    journal_dir: Option<PathBuf>,
-    editor: Option<String>,
-    default_time: Option<String>,
-    journal_date_format: Option<String>,
-    input_date_formats: Option<Vec<String>>,
-    /// Optional table:
-    /// [synonyms]
-    /// ytd = "yesterday"
-    /// ayer = "yesterday"
-    synonyms: Option<HashMap<String, String>>,
 }
 
 impl Config {
