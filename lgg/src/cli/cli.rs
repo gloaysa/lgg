@@ -9,7 +9,7 @@ use super::style::Style;
 #[command(
     version,
     about,
-    group(ArgGroup::new("read_mode").args(["on", "from", "to", "at", "style", "tags"]).multiple(true)),
+    group(ArgGroup::new("read_mode").args(["on", "from", "to", "at", "tags"]).multiple(true)),
     group(ArgGroup::new("edit_mode").args(["edit"])),
     group(ArgGroup::new("write_mode").args(["text"])),
     group(ArgGroup::new("solo").args(["path", "all_tags"]).conflicts_with_all(["read_mode", "edit_mode", "write_mode"])),
@@ -40,6 +40,9 @@ pub struct Cli {
     /// `lgg --on today --at 12:23` will return all entries written today from 12:00 til 12:59.
     #[arg(long)]
     pub at: Option<String>,
+    /// Prints the count of found entries/tags.
+    #[arg(long)]
+    pub count: bool,
 
     /// Output style: "long" or "short". Short style only shows the date, titles and tags of searched entries.
     #[arg(long, short, value_enum, env = "LGG_STYLE", default_value_t= Style::Long)]

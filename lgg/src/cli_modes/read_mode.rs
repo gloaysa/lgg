@@ -11,7 +11,7 @@ pub fn read_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<Cl
 
     if cli.all_tags {
         let tags = journal.search_all_tags();
-        print_tags(renderer, tags);
+        print_results(renderer, &PrintResult::Tags(tags), cli.count);
         return Ok(CliModeResult::Finish);
     }
 
@@ -52,35 +52,52 @@ pub fn read_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<Cl
         ..Default::default()
     };
     let result = journal.read_entries(&options);
-    print_entries(renderer, result);
+    print_results(renderer, &PrintResult::Entries(result), cli.count);
     Ok(CliModeResult::Finish)
 }
 
-fn print_entries(renderer: &Renderer, result: QueryResult) {
-    if result.entries.is_empty() {
-        renderer.print_info(&format!("No entries found"));
-    } else {
-        renderer.print_info(&format!("{} entries found.", result.entries.len()));
-        renderer.print_entries(&result);
+enum PrintResult {
+    Entries(QueryResult),
+    Tags(QueryTagsResult),
+}
+
+fn print_results(renderer: &Renderer, result: &PrintResult, print_count: bool) {
+    let mut errors = Vec::new();
+    if print_count {
+        match result {
+            PrintResult::Entries(res) => {
+                renderer.print_info(&format!("{} entries found.", res.entries.len()));
+            }
+            PrintResult::Tags(res) => {
+                renderer.print_info(&format!("{} tags found.", res.tags.len()));
+            }
+        }
+
+        return;
     }
-    if !result.errors.is_empty() {
-        print_errors(renderer, result.errors);
+
+    if let PrintResult::Entries(res) = result {
+        errors.extend(&res.errors);
+        if res.entries.is_empty() {
+            renderer.print_info(&format!("No entries found."));
+        } else {
+            renderer.print_entries(&res);
+        }
+    }
+    if let PrintResult::Tags(res) = result {
+        errors.extend(&res.errors);
+        if res.tags.is_empty() {
+            renderer.print_info(&format!("No tags found."));
+        } else {
+            renderer.print_tags(&res.tags);
+        }
+    }
+    if !errors.is_empty() {
+        print_errors(renderer, &errors);
     }
 }
 
-fn print_tags(renderer: &Renderer, result: QueryTagsResult) {
-    if result.tags.is_empty() {
-        renderer.print_info(&format!("No tags found"));
-    } else {
-        renderer.print_info(&format!("{} unique tags found.", result.tags.len()));
-        renderer.print_tags(&result.tags);
-    }
-    if !result.errors.is_empty() {
-        print_errors(renderer, result.errors);
-    }
-}
-
-fn print_errors(renderer: &Renderer, errors: Vec<QueryError>) {
+fn print_errors(renderer: &Renderer, errors: &Vec<&QueryError>) {
     renderer.print_md("\n# Errors:");
     for error in errors {
         match error {
