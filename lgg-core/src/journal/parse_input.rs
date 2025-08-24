@@ -12,6 +12,13 @@ pub enum DateFilter {
     Range(NaiveDate, NaiveDate),
 }
 
+/// The result of parsing a time string, which can be a single time or a range.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum TimeFilter {
+    Single(NaiveTime),
+    Range(NaiveTime, NaiveTime),
+}
+
 /// Configuration options for parsing functions.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct ParseOptions<'a> {
@@ -61,13 +68,21 @@ pub fn parse_raw_user_input(input: &str, options: Option<ParseOptions>) -> Parse
 
     let (date, explicit_date) = match date_opt {
         Some(DateFilter::Single(d)) => (d, true),
-        Some(DateFilter::Range(start, _)) => (start, true), // For now, just use the start of the range
+        // Only the start of the range. For 'this week' it'll be Monday.
+        Some(DateFilter::Range(start, _)) => (start, true),
         None => (reference_date, false),
     };
 
+    let time = match time_opt {
+        Some(TimeFilter::Single(d)) => Some(d),
+        // We need the 'from' part, where the hour starts.
+        // That way 'morning' becomes 06:00
+        Some(TimeFilter::Range(from, _to)) => Some(from),
+        None => None,
+    };
     ParsedInline {
         date,
-        time: time_opt,
+        time,
         title,
         body,
         tags: Vec::new(),
@@ -139,6 +154,108 @@ pub fn parse_date_token(
         // Only one single
         (DateFilter::Single(a_single_date), None) => Some(DateFilter::Single(a_single_date)),
     }
+}
+
+/// Parses a string token into a specific time of day (`NaiveTime`).
+///
+/// This function is case-insensitive and understands several formats, processed in order:
+/// 1.  **Keywords**: `noon` (12:00), `midnight` (00:00).
+/// 2.  **12-hour Format**: A time ending in `am` or `pm`, with optional minutes.
+///     Examples: "6am", "6 pm", "12:30pm".
+/// 3.  **24-hour Format (HH:MM)**: e.g., "14:30", "08:00".
+/// 4.  **24-hour Format (Hour only)**: A single integer from 0-23. e.g., "8", "17".
+///
+/// # Arguments
+///
+/// * `s` - The string slice to parse.
+///
+/// # Returns
+///
+/// `Some(NaiveTime)` if parsing is successful, `None` otherwise.
+pub fn parse_time_token(s: &str) -> Option<TimeFilter> {
+    if Keywords::matches(Keyword::Morning, s) {
+        let from = NaiveTime::from_hms_opt(6, 0, 0)?;
+        let to = NaiveTime::from_hms_opt(12, 0, 0)?;
+        return Some(TimeFilter::Range(from, to));
+    }
+    if Keywords::matches(Keyword::Noon, s) {
+        let from = NaiveTime::from_hms_opt(12, 0, 0)?;
+        let to = NaiveTime::from_hms_opt(18, 0, 0)?;
+        return Some(TimeFilter::Range(from, to));
+    }
+    if Keywords::matches(Keyword::Evening, s) {
+        let from = NaiveTime::from_hms_opt(18, 0, 0)?;
+        let to = NaiveTime::from_hms_opt(21, 0, 0)?;
+        return Some(TimeFilter::Range(from, to));
+    }
+    if Keywords::matches(Keyword::Night, s) {
+        let from = NaiveTime::from_hms_opt(21, 0, 0)?;
+        let to = NaiveTime::from_hms_opt(0, 0, 0)?;
+        return Some(TimeFilter::Range(from, to));
+    }
+    if Keywords::matches(Keyword::Midnight, s) {
+        let from = NaiveTime::from_hms_opt(00, 0, 0)?;
+        let to = NaiveTime::from_hms_opt(6, 0, 0)?;
+        return Some(TimeFilter::Range(from, to));
+    }
+
+    let lower_s = s.to_ascii_lowercase();
+    if lower_s.ends_with("am") || lower_s.ends_with("pm") {
+        let (core_str, suffix) = s.split_at(s.len() - 2);
+        let is_pm = suffix.to_ascii_lowercase() == "pm";
+        let core = core_str.trim();
+
+        let parts = if let Some(colon) = core.find(':') {
+            let (h_str, rest) = core.split_at(colon);
+            let rest = &rest[1..];
+            let (m_str, s_str_opt) = if let Some(colon2) = rest.find(':') {
+                let (m, s_part) = rest.split_at(colon2);
+                (m, Some(&s_part[1..]))
+            } else {
+                (rest, None)
+            };
+
+            if let (Ok(h), Ok(m)) = (h_str.parse::<u32>(), m_str.parse::<u32>()) {
+                let s = s_str_opt.and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+                Some((h, m, s))
+            } else {
+                None
+            }
+        } else {
+            if let Ok(h) = core.parse::<u32>() {
+                Some((h, 0, 0))
+            } else {
+                None
+            }
+        };
+
+        if let Some((h, m, s)) = parts {
+            if h == 0 || h > 12 || m > 59 || s > 59 {
+                return None;
+            }
+            let h24 = match (h, is_pm) {
+                (12, false) => 0, // 12am is midnight
+                (12, true) => 12, // 12pm is noon
+                (_, true) => h + 12,
+                (_, false) => h,
+            };
+            return Some(TimeFilter::Single(NaiveTime::from_hms_opt(h24, m, s)?));
+        } else {
+            return None; // Parsing of h,m,s failed
+        }
+    }
+
+    // 24h: "HH:MM"
+    if let Ok(nt) = NaiveTime::parse_from_str(s, "%H:%M") {
+        return Some(TimeFilter::Single(nt));
+    }
+    // Single hour (24h format implied): "H" or "HH"
+    if let Ok(h) = s.parse::<u32>() {
+        if h <= 23 {
+            return Some(TimeFilter::Single(NaiveTime::from_hms_opt(h, 0, 0)?));
+        }
+    }
+    None
 }
 
 fn resolve_date_token(
@@ -226,105 +343,13 @@ fn resolve_date_token(
         .next()
 }
 
-/// Parses a string token into a specific time of day (`NaiveTime`).
-///
-/// This function is case-insensitive and understands several formats, processed in order:
-/// 1.  **Keywords**: `noon` (12:00), `midnight` (00:00).
-/// 2.  **12-hour Format**: A time ending in `am` or `pm`, with optional minutes.
-///     Examples: "6am", "6 pm", "12:30pm".
-/// 3.  **24-hour Format (HH:MM)**: e.g., "14:30", "08:00".
-/// 4.  **24-hour Format (Hour only)**: A single integer from 0-23. e.g., "8", "17".
-///
-/// # Arguments
-///
-/// * `s` - The string slice to parse.
-///
-/// # Returns
-///
-/// `Some(NaiveTime)` if parsing is successful, `None` otherwise.
-pub fn parse_time_token(s: &str) -> Option<NaiveTime> {
-    if Keywords::matches(Keyword::Morning, s) {
-        return NaiveTime::from_hms_opt(8, 0, 0);
-    }
-    if Keywords::matches(Keyword::Noon, s) {
-        return NaiveTime::from_hms_opt(12, 0, 0);
-    }
-    if Keywords::matches(Keyword::Evening, s) {
-        return NaiveTime::from_hms_opt(18, 0, 0);
-    }
-    if Keywords::matches(Keyword::Night, s) {
-        return NaiveTime::from_hms_opt(21, 0, 0);
-    }
-    if Keywords::matches(Keyword::Midnight, s) {
-        return NaiveTime::from_hms_opt(0, 0, 0);
-    }
-
-    let lower_s = s.to_ascii_lowercase();
-    if lower_s.ends_with("am") || lower_s.ends_with("pm") {
-        let (core_str, suffix) = s.split_at(s.len() - 2);
-        let is_pm = suffix.to_ascii_lowercase() == "pm";
-        let core = core_str.trim();
-
-        let parts = if let Some(colon) = core.find(':') {
-            let (h_str, rest) = core.split_at(colon);
-            let rest = &rest[1..];
-            let (m_str, s_str_opt) = if let Some(colon2) = rest.find(':') {
-                let (m, s_part) = rest.split_at(colon2);
-                (m, Some(&s_part[1..]))
-            } else {
-                (rest, None)
-            };
-
-            if let (Ok(h), Ok(m)) = (h_str.parse::<u32>(), m_str.parse::<u32>()) {
-                let s = s_str_opt.and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-                Some((h, m, s))
-            } else {
-                None
-            }
-        } else {
-            if let Ok(h) = core.parse::<u32>() {
-                Some((h, 0, 0))
-            } else {
-                None
-            }
-        };
-
-        if let Some((h, m, s)) = parts {
-            if h == 0 || h > 12 || m > 59 || s > 59 {
-                return None;
-            }
-            let h24 = match (h, is_pm) {
-                (12, false) => 0, // 12am is midnight
-                (12, true) => 12, // 12pm is noon
-                (_, true) => h + 12,
-                (_, false) => h,
-            };
-            return NaiveTime::from_hms_opt(h24, m, s);
-        } else {
-            return None; // Parsing of h,m,s failed
-        }
-    }
-
-    // 24h: "HH:MM"
-    if let Ok(nt) = NaiveTime::parse_from_str(s, "%H:%M") {
-        return Some(nt);
-    }
-    // Single hour (24h format implied): "H" or "HH"
-    if let Ok(h) = s.parse::<u32>() {
-        if h <= 23 {
-            return NaiveTime::from_hms_opt(h, 0, 0);
-        }
-    }
-    None
-}
-
 /// Try to parse `<prefix>:` where prefix may contain date and/or time.
 /// Returns (date, time, remainder_after_colon).
 fn parse_prefix<'a>(
     input: &'a str,
     reference_date: NaiveDate,
     formats: &[&str],
-) -> (Option<DateFilter>, Option<NaiveTime>, &'a str) {
+) -> (Option<DateFilter>, Option<TimeFilter>, &'a str) {
     if let Some(idx) = input.find(": ") {
         let (prefix, rest_with_colon) = input.split_at(idx);
         let rest = &rest_with_colon[1..]; // skip ':'
@@ -365,9 +390,9 @@ fn parse_prefix<'a>(
     (None, None, input)
 }
 
-fn parse_iso_datetime(s: &str) -> Option<(DateFilter, NaiveTime)> {
+fn parse_iso_datetime(s: &str) -> Option<(DateFilter, TimeFilter)> {
     if let Ok(dt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M") {
-        return Some((DateFilter::Single(dt.date()), dt.time()));
+        return Some((DateFilter::Single(dt.date()), TimeFilter::Single(dt.time())));
     }
     None
 }
@@ -460,10 +485,10 @@ mod tests {
         assert_eq!(p3.time, Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()));
         assert_eq!(p3.title, "Note 3");
         assert_eq!(p4.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
-        assert_eq!(p4.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
+        assert_eq!(p4.time, Some(NaiveTime::from_hms_opt(6, 0, 0).unwrap()));
         assert_eq!(p4.title, "Note 4");
         assert_eq!(p5.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
-        assert_eq!(p5.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
+        assert_eq!(p5.time, Some(NaiveTime::from_hms_opt(6, 0, 0).unwrap()));
         assert_eq!(p5.title, "Note 5");
     }
 
@@ -485,6 +510,15 @@ mod tests {
         assert_eq!(p.body, "And the body.\n### Header 3");
         assert!(!p.explicit_date);
         assert!(p.time.is_none());
+    }
+
+    #[test]
+    fn date_with_no_title() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
+        let p1 = parse_raw_user_input("yesterday at 6am: ", opts(anchor));
+        assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 14).unwrap());
+        assert_eq!(p1.time, Some(NaiveTime::from_hms_opt(6, 0, 0).unwrap()));
+        assert_eq!(p1.title, "");
     }
 
     #[test]
@@ -554,10 +588,10 @@ mod tests {
         let p_opts = opts(anchor);
 
         let p = parse_raw_user_input("at morning: Title", p_opts);
-        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(6, 0, 0).unwrap()));
 
         let p = parse_raw_user_input("today at morning: Title A", p_opts);
-        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()));
+        assert_eq!(p.time, Some(NaiveTime::from_hms_opt(6, 0, 0).unwrap()));
 
         let p = parse_raw_user_input("tuesday at noon: Title A", p_opts);
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(12, 0, 0).unwrap()));

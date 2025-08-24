@@ -1,10 +1,10 @@
 //! The core `Journal` struct and its associated types, providing the primary API for interaction.
-use super::date_utils::get_dates_in_range;
+use super::date_utils::{get_dates_in_range, time_is_in_range};
 use super::format_utils::{format_day_header, format_entry_block};
 use super::journal_entry::JournalEntry;
 use super::parse_entries::parse_file_content;
 use super::parse_input::DateFilter::{Range, Single};
-use super::parse_input::{ParseOptions, parse_date_token, parse_raw_user_input};
+use super::parse_input::{ParseOptions, parse_date_token, parse_raw_user_input, parse_time_token};
 use super::path_utils::{day_path, scan_dir_for_md_files};
 use crate::config::Config;
 use anyhow::anyhow;
@@ -42,6 +42,7 @@ pub struct QueryTagsResult {
 pub struct ReadEntriesOptions<'a> {
     pub start_date: Option<&'a str>,
     pub end_date: Option<&'a str>,
+    pub time: Option<&'a str>,
     pub tags: Option<&'a Vec<String>>,
 }
 
@@ -149,7 +150,7 @@ impl Journal {
             }
 
             result.entries.push(new_entry);
-            result.entries.sort_by_key(|e| e.date);
+            result.entries.sort_by_key(|e| e.time);
             let mut new_content = header;
             for entry in result.entries {
                 let block = format_entry_block(&entry.title, &entry.body, Some(entry.time));
@@ -195,6 +196,15 @@ impl Journal {
         }
 
         entries.sort_by_key(|k| k.date);
+
+        if let Some(time) = &options.time {
+            if let Some(parsed_time) = parse_time_token(time) {
+                entries = entries
+                    .into_iter()
+                    .filter(|entry| time_is_in_range(parsed_time, entry.time))
+                    .collect();
+            }
+        }
 
         if let Some(tags) = &options.tags {
             let found_tags: Vec<String> = tags
@@ -425,7 +435,7 @@ mod tests {
     }
 
     #[test]
-    fn read_entries_range_date_success() {
+    fn read_entries_date_range_success() {
         let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // Monday
         let (j, _tmp) = mk_journal_with_default(Some(anchor));
 
@@ -452,6 +462,41 @@ mod tests {
         assert!(this_week.errors.is_empty());
         assert_eq!(this_week.entries.len(), 1);
         assert_eq!(this_week.entries[0].title, "This week?");
+    }
+
+    #[test]
+    fn read_entries_time_range_success() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // Monday
+        let (j, _tmp) = mk_journal_with_default(Some(anchor));
+
+        j.create_entry("today at morning: Morning entry").unwrap();
+        j.create_entry("today at night: Night entry.").unwrap();
+        j.create_entry("today at night: Second night entry!")
+            .unwrap();
+        j.create_entry("today at noon: Noon entry").unwrap();
+        j.create_entry("today at morning: Another morning entry.")
+            .unwrap();
+
+        let options = ReadEntriesOptions {
+            start_date: Some("today"),
+            time: Some("night"),
+            ..Default::default()
+        };
+        let night = j.read_entries(&options);
+        assert!(night.errors.is_empty());
+        assert_eq!(night.entries.len(), 2);
+        assert_eq!(night.entries[0].title, "Night entry.");
+        assert_eq!(night.entries[1].title, "Second night entry!");
+
+        let options = ReadEntriesOptions {
+            start_date: Some("today"),
+            time: Some("noon"),
+            ..Default::default()
+        };
+        let noon = j.read_entries(&options);
+        assert!(noon.errors.is_empty());
+        assert_eq!(noon.entries.len(), 1);
+        assert_eq!(noon.entries[0].title, "Noon entry");
     }
 
     #[test]

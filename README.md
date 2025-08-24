@@ -92,7 +92,7 @@ You can use the following keywords (and user-defined synonyms) to specify dates 
 
 **Times of Day**
 
-- `morning` (08:00)
+- `morning` (06:00)
 - `noon` (12:00)
 - `evening` (18:00)
 - `night` (21:00)
@@ -107,6 +107,7 @@ You can use the following keywords (and user-defined synonyms) to specify dates 
 - Use the `--on` flag to view all entries for a given date.
 - Use the `--from` flag to view all entries from the give day til today.
 - Use the `--to` flag in combination with `--from` to view all entries in a range.
+- Use the `--at` flag to view all entries for (or from) an specific time. You can supply an exact hour (13:00) or a Time of Day keyword (morning). Following the example, the first one (13:00), will give you all entries written from 13:00 til 14:00. The second one (morning) from 06:00 til 11:59.
 - Use the `--tags` flag to search for one or more tags within all your entries.
 - Use the `--all-tags` flag to list all the tags within your entries.
 - Use `--style [long][short]` to display your entries with/without body. Default is `long`. It can also be set with an env variable `LGG_STYLE`, so you can change the default.
@@ -128,13 +129,19 @@ lgg --on 2025-08-15
 # it will fallback to the closest day in the past
 lgg --on monday
 
-## Searching for entries from this week with specific tag
+# Searching for entries from this week with specific tag
 lgg --from 'this week' --tags @work
+
+# You can provide a time keyword to filter more
+lgg --from 'last week' --at morning
+
+## Or to get ALL your entries written in an specific time of the day
+lgg --at '11:00'
 ```
 
 ### Editing Entries
 
-- Use the `--edit` flag to edit entries for a given date. Only works on single date searches (`today`, `monday`...).
+- Use the `--edit` flag to edit entries for a given date. Only works on single date searches (`today`, `monday`, `12/12/2025`...).
 
 ## Configuration
 

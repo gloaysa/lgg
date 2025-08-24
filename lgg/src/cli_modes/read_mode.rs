@@ -6,6 +6,7 @@ use lgg_core::{Journal, QueryError, QueryResult, QueryTagsResult, ReadEntriesOpt
 pub fn read_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<CliModeResult> {
     let mut start_date: Option<&str> = None;
     let mut end_date: Option<&str> = None;
+    let mut time: Option<&str> = None;
     let mut tags: Option<Vec<String>> = None;
 
     if cli.all_tags {
@@ -32,17 +33,21 @@ pub fn read_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<Cl
             }
         }
     }
+    if let Some(has_time) = &cli.at {
+        time = Some(has_time);
+    }
     if let Some(has_tags) = &cli.tags {
         tags = Some(has_tags.to_vec());
     }
 
-    if start_date.is_none() && tags.is_none() {
+    if start_date.is_none() && time.is_none() && tags.is_none() {
         return Ok(CliModeResult::NothingToDo);
     }
 
     let options = ReadEntriesOptions {
         start_date,
         end_date,
+        time,
         tags: cli.tags.as_ref(),
         ..Default::default()
     };
