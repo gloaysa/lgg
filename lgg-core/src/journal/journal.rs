@@ -1,15 +1,15 @@
 //! The core `Journal` struct and its associated types, providing the primary API for interaction.
-use super::date_utils::{get_dates_in_range, time_is_in_range};
+use super::date_utils::time_is_in_range;
 use super::format_utils::{format_day_header, format_entry_block};
 use super::journal_entry::JournalEntry;
 use super::parse_entries::parse_file_content;
 use super::parse_input::DateFilter::{Range, Single};
 use super::parse_input::{ParseOptions, parse_date_token, parse_raw_user_input, parse_time_token};
-use super::path_utils::{day_path, scan_dir_for_md_files};
+use super::path_utils::{day_file, month_dir, scan_dir_for_md_files, year_dir};
 use crate::config::Config;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
-use chrono::{Local, NaiveDate};
+use chrono::{Datelike, Days, Local, NaiveDate};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -104,27 +104,27 @@ impl Journal {
             Local::now().time()
         };
 
-        let path = day_path(&self.config.journal_dir, date);
-        if let Some(parent) = path.parent() {
+        let day_file = day_file(&self.config.journal_dir, date);
+        if let Some(parent) = day_file.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("creating parent directory {}", parent.display()))?;
         }
 
-        let is_new = !path.exists();
+        let is_new = !day_file.exists();
         let header = format_day_header(&self.config.journal_date_format, date);
         let block = format_entry_block(&parsed_input.title, &parsed_input.body, Some(time));
 
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&path)
-            .with_context(|| format!("opening {}", path.display()))?;
+            .open(&day_file)
+            .with_context(|| format!("opening {}", day_file.display()))?;
 
         if is_new {
             writeln!(file, "{header}\n")
-                .with_context(|| format!("writing day header to {}", path.display()))?;
+                .with_context(|| format!("writing day header to {}", day_file.display()))?;
             write!(file, "{block}")
-                .with_context(|| format!("appending entry to {}", path.display()))?;
+                .with_context(|| format!("appending entry to {}", day_file.display()))?;
         } else {
             // Read the file and find, based on time, where to put the new entry.
             let new_entry = JournalEntry {
@@ -133,18 +133,18 @@ impl Journal {
                 title: parsed_input.title.to_string(),
                 body: parsed_input.body.to_string(),
                 tags: parsed_input.tags.clone(),
-                path: path.clone(),
+                path: day_file.clone(),
             };
-            let mut result = self.parse_file(&path);
+            let mut result = self.parse_file(&day_file);
 
             if !result.errors.is_empty() {
                 // TODO: This function should be able to gracefully return errors.
                 // We need to let the user know that there's a problem with their file.
                 // We still append the entry because is better than simply erroring out.
                 writeln!(file, "{header}\n")
-                    .with_context(|| format!("writing day header to {}", path.display()))?;
+                    .with_context(|| format!("writing day header to {}", day_file.display()))?;
                 write!(file, "{block}")
-                    .with_context(|| format!("appending entry to {}", path.display()))?;
+                    .with_context(|| format!("appending entry to {}", day_file.display()))?;
 
                 return Ok(new_entry);
             }
@@ -158,7 +158,7 @@ impl Journal {
                 new_content.push_str(&block);
             }
 
-            fs::write(&path, new_content)?;
+            fs::write(&day_file, new_content)?;
         }
 
         Ok(JournalEntry {
@@ -167,21 +167,19 @@ impl Journal {
             title: parsed_input.title,
             body: parsed_input.body,
             tags: parsed_input.tags,
-            path,
+            path: day_file,
         })
     }
 
-    /// Reads all entries for a specific day.
+    /// Reads and returns all entries, the results can be filtered by `options`.
     ///
     /// This is the primary query function for retrieving entries. It is designed to be
     /// resilient, returning a [`QueryResult`] that contains both parsed entries and
-    /// any warnings that occurred.
+    /// any errors that occurred.
     ///
     /// # Arguments
     ///
-    /// * `date_str` - A string that can be parsed into a date (e.g., "yesterday", "2025-08-15").
-    /// * `reference_date` - Optional argument that will allow to modify the date of reference for
-    /// relatives dates (yesterday, tomorrow...)
+    /// * `options` - Those are filtering options, of type time, date and tags. If none are passed, the function returns all entries.
     pub fn read_entries(&self, options: &ReadEntriesOptions) -> QueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
@@ -357,9 +355,9 @@ impl Journal {
     fn read_single_date_entry(&self, date: NaiveDate) -> QueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
-        let path = day_path(&self.config.journal_dir, date);
-        if path.exists() {
-            let parse_result = self.parse_file(&path);
+        let day_file = day_file(&self.config.journal_dir, date);
+        if day_file.exists() {
+            let parse_result = self.parse_file(&day_file);
             entries.extend(parse_result.entries);
             errors.extend(parse_result.errors);
         }
@@ -367,18 +365,42 @@ impl Journal {
         QueryResult { entries, errors }
     }
 
-    fn read_range_date_entry(&self, start_date: NaiveDate, end_date: NaiveDate) -> QueryResult {
+    fn read_range_date_entry(&self, range_start: NaiveDate, range_end: NaiveDate) -> QueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
-        let range = get_dates_in_range(start_date, end_date);
 
-        for date in range {
-            let path = day_path(&self.config.journal_dir, date);
-            if path.exists() {
-                let parse_result = self.parse_file(&path);
+        if range_start > range_end {
+            errors.push(QueryError::InvalidDate {
+                input: format!("start date: {} end date: {}", range_start, range_start),
+                error: "End date can't be before a date before the starting date.".to_string(),
+            });
+            return QueryResult { entries, errors };
+        }
+
+        let mut start_date = range_start;
+
+        while start_date <= range_end {
+            let year_dir = year_dir(&self.config.journal_dir, start_date);
+            if !year_dir.exists() {
+                let next_year = start_date.year() + 1;
+                start_date = NaiveDate::from_ymd_opt(next_year, 1, 1).unwrap();
+                continue;
+            }
+            let month_dir = month_dir(&self.config.journal_dir, start_date);
+            if !month_dir.exists() {
+                let year = start_date.year();
+                let next_month = start_date.month() + 1;
+                start_date = NaiveDate::from_ymd_opt(year, next_month, 1).unwrap();
+                continue;
+            }
+            let day_file = day_file(&self.config.journal_dir, start_date);
+            if day_file.exists() {
+                let parse_result = self.parse_file(&day_file);
                 entries.extend(parse_result.entries);
                 errors.extend(parse_result.errors);
             }
+
+            start_date = start_date.checked_add_days(Days::new(1)).unwrap();
         }
 
         QueryResult { entries, errors }
@@ -405,7 +427,7 @@ mod tests {
     fn save_entry_creates_day_file_and_appends() {
         let (j, _tmp) = mk_journal_with_default(None);
         let res = j.create_entry("Test entry. With body.").unwrap();
-        let expected = day_path(&j.config.journal_dir, res.date);
+        let expected = day_file(&j.config.journal_dir, res.date);
         assert_eq!(res.path, expected);
         assert!(res.path.exists());
 
@@ -613,7 +635,7 @@ mod tests {
     fn read_entries_with_malformed_file() {
         let (j, _tmp) = mk_journal_with_default(None);
         let date = Local::now().date_naive();
-        let path = day_path(&j.config.journal_dir, date);
+        let path = day_file(&j.config.journal_dir, date);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, "this file is not valid").unwrap();
 

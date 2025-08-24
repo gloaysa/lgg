@@ -6,17 +6,31 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub fn year_folder_name(date: NaiveDate) -> String {
+    format!("{}", date.format("%Y"))
+}
+
+pub fn month_folder_name(date: NaiveDate) -> String {
+    format!("{}", date.format("%m"))
+}
+
 pub fn day_file_name(date: NaiveDate) -> String {
     format!("{}.md", date.format("%Y-%m-%d"))
 }
 
-pub fn day_dir(root: &Path, date: NaiveDate) -> PathBuf {
-    root.join(date.format("%Y").to_string())
-        .join(date.format("%m").to_string())
+pub fn year_dir(root: &Path, date: NaiveDate) -> PathBuf {
+    root.join(year_folder_name(date))
 }
 
-pub fn day_path(root: &Path, date: NaiveDate) -> PathBuf {
-    day_dir(root, date).join(day_file_name(date))
+pub fn month_dir(root: &Path, date: NaiveDate) -> PathBuf {
+    root.join(year_folder_name(date))
+        .join(month_folder_name(date))
+}
+
+pub fn day_file(root: &Path, date: NaiveDate) -> PathBuf {
+    root.join(year_folder_name(date))
+        .join(month_folder_name(date))
+        .join(day_file_name(date))
 }
 
 pub fn scan_dir_for_md_files(path: &Path) -> Result<Vec<PathBuf>> {

@@ -113,9 +113,6 @@ You can use the following keywords (and user-defined synonyms) to specify dates 
 - Use `--style [long][short]` to display your entries with/without body. Default is `long`. It can also be set with an env variable `LGG_STYLE`, so you can change the default.
 - Use `--count` flag in a to only see the number of results.
 
-> [!NOTE] The current implementation assumes the user won't try and crash their own computer.
-> If you provide a `--from` flag with a date very away in the past (01/01/01), you'll be waiting a while.
-
 ```sh
 # See all entries from yesterday
 lgg --on yesterday
