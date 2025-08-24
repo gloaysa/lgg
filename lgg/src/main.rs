@@ -4,7 +4,7 @@ mod render;
 
 use anyhow::Result;
 use cli::{Cli, Style};
-use cli_modes::{CliModeResult, edit_mode, read_mode, write_mode};
+use cli_modes::{CliModeResult, edit_mode, editor_mode, read_mode, write_mode};
 use lgg_core::Journal;
 use render::{ColorMode, RenderOptions, Renderer};
 use std::io::{self, IsTerminal};
@@ -50,6 +50,10 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
+    if let CliModeResult::Finish = write_mode(&cli, &renderer, &journal)? {
+        return Ok(());
+    };
+
     if let CliModeResult::Finish = read_mode(&cli, &renderer, &journal)? {
         return Ok(());
     };
@@ -58,7 +62,7 @@ fn run() -> Result<()> {
         return Ok(());
     };
 
-    if let CliModeResult::Finish = write_mode(&cli, &renderer, &journal)? {
+    if let CliModeResult::Finish = editor_mode(&cli, &renderer, &journal)? {
         return Ok(());
     };
 

@@ -47,7 +47,7 @@ pub struct Cli {
     pub edit: Option<String>,
 
     /// Free text for insert mode (e.g., `lgg yesterday: Title. Body`).
-    #[arg(exclusive = true)]
+    #[arg()]
     pub text: Vec<String>,
 }
 impl Cli {

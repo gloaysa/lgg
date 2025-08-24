@@ -11,16 +11,29 @@ pub fn write_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<C
     if !cli.text.is_empty() {
         let inline = cli.text.join(" ");
         new_entry = journal.create_entry(&inline)?;
+        renderer.print_info(&format!("Added new entry to {}", new_entry.path.display()));
+        renderer.print_entry_line(&new_entry);
+        Ok(CliModeResult::Finish)
     } else {
-        let editor = resolve_editor(&journal)?;
-        let input = create_editor_buffer(&editor)?;
-        let trimmed = input.trim();
-        if trimmed.is_empty() {
-            renderer.print_info(&format!("No entry to save, because no text was received."));
-            return Ok(CliModeResult::Finish);
-        }
-        new_entry = journal.create_entry(&trimmed)?;
+        return Ok(CliModeResult::NothingToDo);
     }
+}
+
+pub fn editor_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<CliModeResult> {
+    if !cli.text.is_empty() {
+        return write_mode(cli, renderer, journal);
+    }
+
+    let new_entry: JournalEntry;
+
+    let editor = resolve_editor(&journal)?;
+    let input = create_editor_buffer(&editor)?;
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        renderer.print_info(&format!("No entry to save, because no text was received."));
+        return Ok(CliModeResult::Finish);
+    }
+    new_entry = journal.create_entry(&trimmed)?;
     renderer.print_info(&format!("Added new entry to {}", new_entry.path.display()));
     renderer.print_entry_line(&new_entry);
     Ok(CliModeResult::Finish)
