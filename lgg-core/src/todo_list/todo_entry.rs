@@ -8,6 +8,5 @@ pub struct TodoEntry {
     pub time: NaiveTime,
     pub title: String,
     pub body: String,
-    pub tags: Vec<String>,
     pub path: PathBuf,
 }

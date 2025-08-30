@@ -1,7 +1,11 @@
 use crate::{
-    Config,
     journal::Journal,
-    utils::{parse_input::parse_raw_user_input, parsed_input::ParseInputOptions},
+    utils::{
+        parse_input::{parse_date_token, parse_raw_user_input},
+        parsed_entry::DateFilter,
+        parsed_input::ParseInputOptions,
+    },
+    Config,
 };
 use anyhow::{Context, Result};
 use chrono::{Local, NaiveDate, NaiveTime};
@@ -73,5 +77,19 @@ impl Lgg {
             title: parsed_input.title,
             body: parsed_input.body,
         })
+    }
+
+    pub fn parse_dates(&self, start_date: &str, end_date: Option<&str>) -> Option<DateFilter> {
+        let format_strs: Vec<&str> = self
+            .config
+            .input_date_formats
+            .iter()
+            .map(AsRef::as_ref)
+            .collect();
+        let opts = ParseInputOptions {
+            reference_date: Some(self.config.reference_date),
+            formats: Some(&format_strs),
+        };
+        parse_date_token(start_date, end_date, Some(opts))
     }
 }

@@ -48,7 +48,6 @@ pub fn parse_raw_user_input(input: &str, options: Option<ParseInputOptions>) -> 
         time,
         title,
         body,
-        tags: Vec::new(),
     }
 }
 

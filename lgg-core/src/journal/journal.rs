@@ -4,9 +4,8 @@ use super::journal_paths::{day_file, month_dir, year_dir};
 use crate::utils::date_utils::time_is_in_range;
 use crate::utils::format_utils::{format_day_header, format_entry_block};
 use crate::utils::parse_entries::parse_file_content;
-use crate::utils::parse_input::{parse_date_token, parse_time_token};
+use crate::utils::parse_input::parse_time_token;
 use crate::utils::parsed_entry::DateFilter;
-use crate::utils::parsed_input::ParseInputOptions;
 use crate::utils::path_utils::scan_dir_for_md_files;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
@@ -43,8 +42,7 @@ pub struct QueryTagsResult {
 
 #[derive(Clone, Debug, Default)]
 pub struct ReadEntriesOptions<'a> {
-    pub start_date: Option<&'a str>,
-    pub end_date: Option<&'a str>,
+    pub dates: Option<DateFilter>,
     pub time: Option<&'a str>,
     pub tags: Option<&'a Vec<String>>,
 }
@@ -161,10 +159,19 @@ impl Journal {
     pub fn read_entries(&self, options: &ReadEntriesOptions) -> QueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
-        if let Some(start_date) = options.start_date {
-            let results = self.search_files_by_date(start_date, options.end_date);
-            entries.extend(results.entries);
-            errors.extend(results.errors);
+        if let Some(dates) = options.dates {
+            match dates {
+                DateFilter::Single(s_date) => {
+                    let result = self.read_single_date_entry(s_date);
+                    entries.extend(result.entries);
+                    errors.extend(result.errors);
+                }
+                DateFilter::Range(s_date, e_date) => {
+                    let result = self.read_range_date_entry(s_date, e_date);
+                    entries.extend(result.entries);
+                    errors.extend(result.errors);
+                }
+            }
         } else {
             let results = self.search_all_files();
             entries.extend(results.entries);
@@ -293,39 +300,6 @@ impl Journal {
         QueryResult { entries, errors }
     }
 
-    fn search_files_by_date(&self, start_date: &str, end_date: Option<&str>) -> QueryResult {
-        let format_strs: Vec<&str> = self.input_date_formats.iter().map(AsRef::as_ref).collect();
-        let opts = ParseInputOptions {
-            reference_date: Some(self.reference_date),
-            formats: Some(&format_strs),
-        };
-        let mut entries = Vec::new();
-        let mut errors = Vec::new();
-
-        // TODO: We have to move parse_date_token out of here. This function should take start_date and end_date as NaiveDate, not strings
-        if let Some(date) = parse_date_token(start_date, end_date, Some(opts)) {
-            match date {
-                DateFilter::Single(s_date) => {
-                    let result = self.read_single_date_entry(s_date);
-                    entries = result.entries;
-                    errors = result.errors;
-                }
-                DateFilter::Range(s_date, e_date) => {
-                    let result = self.read_range_date_entry(s_date, e_date);
-                    entries = result.entries;
-                    errors = result.errors;
-                }
-            }
-        } else {
-            errors.push(QueryError::InvalidDate {
-                input: start_date.to_string(),
-                error: "Not a valid date or keyword.".to_string(),
-            });
-        }
-
-        QueryResult { entries, errors }
-    }
-
     fn read_single_date_entry(&self, date: NaiveDate) -> QueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
@@ -447,7 +421,7 @@ mod tests {
         let _ = j.create_entry(entry).unwrap();
         let _ = j.create_entry(entry2).unwrap();
         let options = ReadEntriesOptions {
-            start_date: Some("today"),
+            dates: Some(DateFilter::Single(Local::now().date_naive())),
             ..Default::default()
         };
 
@@ -508,7 +482,10 @@ mod tests {
         j.create_entry(entry).unwrap();
 
         let options = ReadEntriesOptions {
-            start_date: Some("last week"),
+            dates: Some(DateFilter::Range(
+                NaiveDate::from_ymd_opt(2025, 07, 28).expect("valid date"),
+                NaiveDate::from_ymd_opt(2025, 08, 03).expect("valid date"),
+            )),
             ..Default::default()
         };
         let last_week = j.read_entries(&options);
@@ -517,7 +494,10 @@ mod tests {
         assert_eq!(last_week.entries[0].title, "First entry.");
         assert_eq!(last_week.entries[1].title, "Second entry!");
         let options = ReadEntriesOptions {
-            start_date: Some("this week"),
+            dates: Some(DateFilter::Range(
+                anchor,
+                NaiveDate::from_ymd_opt(2025, 08, 10).expect("valid date"),
+            )),
             ..Default::default()
         };
         let this_week = j.read_entries(&options);
@@ -577,7 +557,7 @@ mod tests {
         j.create_entry(entry).unwrap();
 
         let options = ReadEntriesOptions {
-            start_date: Some("today"),
+            dates: Some(DateFilter::Single(anchor)),
             time: Some("night"),
             ..Default::default()
         };
@@ -588,7 +568,7 @@ mod tests {
         assert_eq!(night.entries[1].title, "Second night entry!");
 
         let options = ReadEntriesOptions {
-            start_date: Some("today"),
+            dates: Some(DateFilter::Single(anchor)),
             time: Some("noon"),
             ..Default::default()
         };
@@ -641,7 +621,10 @@ mod tests {
         j.create_entry(entry).unwrap();
 
         let options = ReadEntriesOptions {
-            start_date: Some("this week"),
+            dates: Some(DateFilter::Range(
+                anchor,
+                NaiveDate::from_ymd_opt(2025, 08, 10).expect("valid date"),
+            )),
             tags: Some(&expected_tags),
             ..Default::default()
         };
@@ -763,25 +746,14 @@ mod tests {
     fn read_entries_on_date_with_no_file() {
         let (j, _tmp) = mk_journal_with_default(None);
         let options = ReadEntriesOptions {
-            start_date: Some("yesterday"),
+            dates: Some(DateFilter::Single(
+                NaiveDate::from_ymd_opt(2025, 08, 03).expect("valid date"),
+            )),
             ..Default::default()
         };
         let result = j.read_entries(&options);
         assert!(result.errors.is_empty());
         assert!(result.entries.is_empty());
-    }
-
-    #[test]
-    fn read_entries_with_invalid_date_string() {
-        let (j, _tmp) = mk_journal_with_default(None);
-        let options = ReadEntriesOptions {
-            start_date: Some("not-a-date"),
-            ..Default::default()
-        };
-        let result = j.read_entries(&options);
-        assert!(result.entries.is_empty());
-        assert_eq!(result.errors.len(), 1);
-        assert!(matches!(&result.errors[0], QueryError::InvalidDate { .. }));
     }
 
     #[test]
@@ -793,7 +765,7 @@ mod tests {
         fs::write(&path, "this file is not valid").unwrap();
 
         let options = ReadEntriesOptions {
-            start_date: Some("today"),
+            dates: Some(DateFilter::Single(Local::now().date_naive())),
             ..Default::default()
         };
         let result = j.read_entries(&options);

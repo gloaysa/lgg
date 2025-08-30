@@ -54,7 +54,6 @@ impl TodoList {
             time,
             title: parsed_input.title,
             body: parsed_input.body,
-            tags: parsed_input.tags,
             path: PathBuf::new(),
         })
     }

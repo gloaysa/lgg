@@ -8,8 +8,9 @@ use lgg_core::{Lgg, ReadEntriesOptions};
 
 pub fn edit_mode(cli: &Cli, renderer: &Renderer, lgg: &Lgg) -> Result<CliModeResult> {
     if let Some(start_date) = &cli.edit {
+        let dates = lgg.parse_dates(start_date, None);
         let options = ReadEntriesOptions {
-            start_date: Some(start_date),
+            dates,
             ..Default::default()
         };
         let results = lgg.journal.read_entries(&options);

@@ -15,5 +15,4 @@ pub struct ParsedInput {
     pub time: Option<NaiveTime>,
     pub title: String,
     pub body: String,
-    pub tags: Vec<String>,
 }

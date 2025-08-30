@@ -44,9 +44,12 @@ pub fn read_mode(cli: &Cli, renderer: &Renderer, lgg: &Lgg) -> Result<CliModeRes
         return Ok(CliModeResult::NothingToDo);
     }
 
+    let dates = match start_date {
+        Some(d) => lgg.parse_dates(d, end_date),
+        None => None,
+    };
     let options = ReadEntriesOptions {
-        start_date,
-        end_date,
+        dates,
         time,
         tags: cli.tags.as_ref(),
         ..Default::default()
