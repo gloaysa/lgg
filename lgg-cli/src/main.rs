@@ -5,7 +5,7 @@ mod render;
 use anyhow::Result;
 use cli::{Cli, Style};
 use cli_modes::{CliModeResult, edit_mode, editor_mode, read_mode, write_mode};
-use lgg_core::Journal;
+use lgg_core::Lgg;
 use render::{ColorMode, RenderOptions, Renderer};
 use std::io::{self, IsTerminal};
 use std::process::ExitCode;
@@ -22,7 +22,7 @@ fn main() -> ExitCode {
 
 fn run() -> Result<()> {
     let cli = Cli::new();
-    let journal = Journal::new()?;
+    let lgg = Lgg::new()?;
 
     let use_color = match cli.color {
         ColorMode::Always => true,
@@ -40,29 +40,29 @@ fn run() -> Result<()> {
         Style::Long => false,
     };
     let renderer = Renderer::new(Some(RenderOptions {
-        date_format: journal.config.journal_date_format.to_string(),
+        date_format: lgg.config.journal_date_format.to_string(),
         use_color,
         short_mode,
     }));
 
     if cli.path {
-        renderer.print_info(&format!("{}", journal.config.journal_dir.display()));
+        renderer.print_info(&format!("{}", lgg.config.journal_dir.display()));
         return Ok(());
     }
 
-    if let CliModeResult::Finish = write_mode(&cli, &renderer, &journal)? {
+    if let CliModeResult::Finish = write_mode(&cli, &renderer, &lgg)? {
         return Ok(());
     };
 
-    if let CliModeResult::Finish = read_mode(&cli, &renderer, &journal)? {
+    if let CliModeResult::Finish = read_mode(&cli, &renderer, &lgg)? {
         return Ok(());
     };
 
-    if let CliModeResult::Finish = edit_mode(&cli, &renderer, &journal)? {
+    if let CliModeResult::Finish = edit_mode(&cli, &renderer, &lgg)? {
         return Ok(());
     };
 
-    if let CliModeResult::Finish = editor_mode(&cli, &renderer, &journal)? {
+    if let CliModeResult::Finish = editor_mode(&cli, &renderer, &lgg)? {
         return Ok(());
     };
 

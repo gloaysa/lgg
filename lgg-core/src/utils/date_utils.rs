@@ -1,5 +1,6 @@
-use super::parse_input::TimeFilter;
 use chrono::{NaiveTime, Timelike};
+
+use super::parsed_entry::TimeFilter;
 
 /// Check whether `time` satisfies the time filter.
 /// - `Single(s)`: matches any time WITHIN the hour.

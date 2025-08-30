@@ -1,15 +1,5 @@
-use std::path::PathBuf;
-
 use chrono::{NaiveDate, NaiveTime};
-
-#[derive(Debug)]
-pub struct ParsedEntry {
-    pub date: NaiveDate,
-    pub time: NaiveTime,
-    pub title: String,
-    pub body: String,
-    pub tags: Vec<String>,
-}
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct JournalEntry {
@@ -19,4 +9,13 @@ pub struct JournalEntry {
     pub body: String,
     pub tags: Vec<String>,
     pub path: PathBuf,
+}
+
+/// Properties to create a new JournalEntry
+pub struct JournalWriteEntry {
+    pub date: NaiveDate,
+    pub time: NaiveTime,
+    pub title: String,
+    pub body: String,
+    pub tags: Vec<String>,
 }

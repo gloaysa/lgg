@@ -1,43 +1,12 @@
-use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
-
+use super::{
+    parsed_entry::{DateFilter, TimeFilter},
+    parsed_input::{ParseInputOptions, ParsedInput},
+};
 use crate::keywords::{Keyword, Keywords};
+use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 
 /// Default accepted input date formats (parsing only).
 const DEFAULT_FORMATS: &[&str] = &["%d/%m/%Y"];
-
-/// The result of parsing a date string, which can be a single day or a range.
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum DateFilter {
-    Single(NaiveDate),
-    Range(NaiveDate, NaiveDate),
-}
-
-/// The result of parsing a time string, which can be a single time or a range.
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum TimeFilter {
-    Single(NaiveTime),
-    Range(NaiveTime, NaiveTime),
-}
-
-/// Configuration options for parsing functions.
-#[derive(Copy, Clone, Debug, Default)]
-pub struct ParseOptions<'a> {
-    /// The date to use as "today" for relative keywords.
-    pub reference_date: Option<NaiveDate>,
-    /// A slice of `chrono` format strings to try for parsing dates.
-    pub formats: Option<&'a [&'a str]>,
-}
-
-/// Parsed result of inline text (e.g., "yesterday: Title. Body").
-pub struct ParsedInline {
-    pub date: NaiveDate,
-    pub time: Option<NaiveTime>,
-    pub title: String,
-    pub body: String,
-    pub tags: Vec<String>,
-    /// Whether a date (of any kind) was explicitly provided in the prefix.
-    pub explicit_date: bool,
-}
 
 /// The main entry point for parsing an inline journal entry from a single string.
 ///
@@ -55,22 +24,16 @@ pub struct ParsedInline {
 ///
 /// A [`ParsedInline`] struct containing the resolved date, optional time, title, and body.
 /// If no date prefix is found, the date defaults to the reference date.
-pub fn parse_raw_user_input(input: &str, options: Option<ParseOptions>) -> ParsedInline {
-    let options = options.unwrap_or_default();
-    let reference_date = options
-        .reference_date
-        .unwrap_or_else(|| Local::now().date_naive());
-    let formats = options.formats.unwrap_or(DEFAULT_FORMATS);
-
-    let (date_opt, time_opt, rest) = parse_prefix(input, reference_date, formats);
+pub fn parse_raw_user_input(input: &str, options: Option<ParseInputOptions>) -> ParsedInput {
+    let (date_opt, time_opt, rest) = parse_prefix(input, options);
     let (title_raw, body) = split_title_body(rest.trim());
     let title = normalize_title(&title_raw);
 
-    let (date, explicit_date) = match date_opt {
-        Some(DateFilter::Single(d)) => (d, true),
+    let date = match date_opt {
+        Some(DateFilter::Single(d)) => Some(d),
         // Only the start of the range. For 'this week' it'll be Monday.
-        Some(DateFilter::Range(start, _)) => (start, true),
-        None => (reference_date, false),
+        Some(DateFilter::Range(start, _)) => Some(start),
+        None => None,
     };
 
     let time = match time_opt {
@@ -80,13 +43,12 @@ pub fn parse_raw_user_input(input: &str, options: Option<ParseOptions>) -> Parse
         Some(TimeFilter::Range(from, _to)) => Some(from),
         None => None,
     };
-    ParsedInline {
+    ParsedInput {
         date,
         time,
         title,
         body,
         tags: Vec::new(),
-        explicit_date,
     }
 }
 
@@ -127,7 +89,7 @@ pub fn parse_raw_user_input(input: &str, options: Option<ParseOptions>) -> Parse
 pub fn parse_date_token(
     start_date: &str,
     end_date: Option<&str>,
-    options: Option<ParseOptions>,
+    options: Option<ParseInputOptions>,
 ) -> Option<DateFilter> {
     let options = options.unwrap_or_default();
     let reference_date = options
@@ -347,8 +309,7 @@ fn resolve_date_token(
 /// Returns (date, time, remainder_after_colon).
 fn parse_prefix<'a>(
     input: &'a str,
-    reference_date: NaiveDate,
-    formats: &[&str],
+    options: Option<ParseInputOptions>,
 ) -> (Option<DateFilter>, Option<TimeFilter>, &'a str) {
     if let Some(idx) = input.find(": ") {
         let (prefix, rest_with_colon) = input.split_at(idx);
@@ -364,11 +325,7 @@ fn parse_prefix<'a>(
                 let (date_part, time_part) = prefix_trim.split_at(pos);
                 let date_part = date_part.trim();
                 let time_part = time_part[word.len()..].trim(); // skip keyword
-                let opts = ParseOptions {
-                    reference_date: Some(reference_date),
-                    formats: Some(formats),
-                };
-                if let Some(date) = parse_date_token(date_part, None, Some(opts)) {
+                if let Some(date) = parse_date_token(date_part, None, options) {
                     let time = parse_time_token(time_part);
                     return (Some(date), time, rest);
                 } else {
@@ -378,11 +335,7 @@ fn parse_prefix<'a>(
             }
         }
         // Only a date word or formatted date (no time)
-        let opts = ParseOptions {
-            reference_date: Some(reference_date),
-            formats: Some(formats),
-        };
-        if let Some(date) = parse_date_token(prefix_trim, None, Some(opts)) {
+        if let Some(date) = parse_date_token(prefix_trim, None, options) {
             return (Some(date), None, rest);
         }
     }
@@ -429,8 +382,8 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
 
-    fn opts(anchor: NaiveDate) -> Option<ParseOptions<'static>> {
-        Some(ParseOptions {
+    fn opts(anchor: NaiveDate) -> Option<ParseInputOptions<'static>> {
+        Some(ParseInputOptions {
             reference_date: Some(anchor),
             ..Default::default()
         })
@@ -440,29 +393,30 @@ mod tests {
     fn iso_date_prefix() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
         let p = parse_raw_user_input("01/08/2025: Title.\n Body", opts(anchor));
-        assert_eq!(p.date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
+        let date = p.date.expect("expected date");
+        assert_eq!(date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
         assert!(p.time.is_none());
         assert_eq!(p.title, "Title.");
         assert_eq!(p.body, "Body");
-        assert!(p.explicit_date);
     }
 
     #[test]
     fn iso_datetime_prefix() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
         let p = parse_raw_user_input("2025-08-01T13:30: # Title\nBody", opts(anchor));
-        assert_eq!(p.date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
+        let date = p.date.expect("expected date");
+        assert_eq!(date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
         assert_eq!(p.time, Some(NaiveTime::from_hms_opt(13, 30, 0).unwrap()));
         assert_eq!(p.title, "Title");
         assert_eq!(p.body, "Body");
-        assert!(p.explicit_date);
     }
 
     #[test]
     fn natural_yesterday_with_time() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
         let p1 = parse_raw_user_input("yesterday at 6am: Note 1", opts(anchor));
-        assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 14).unwrap());
+        let date = p1.date.expect("expected date");
+        assert_eq!(date, NaiveDate::from_ymd_opt(2025, 8, 14).unwrap());
         assert_eq!(p1.time, Some(NaiveTime::from_hms_opt(6, 0, 0).unwrap()));
         assert_eq!(p1.title, "Note 1");
     }
@@ -475,19 +429,24 @@ mod tests {
         let p3 = parse_raw_user_input("today at 9am: Note 3", opts(anchor));
         let p4 = parse_raw_user_input("at morning: Note 4", opts(anchor));
         let p5 = parse_raw_user_input("today at morning: Note 5", opts(anchor));
-        assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
+
+        assert_eq!(p1.date, Some(NaiveDate::from_ymd_opt(2025, 8, 15).unwrap()));
         assert_eq!(p1.time, Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()));
         assert_eq!(p1.title, "Note 1");
-        assert_eq!(p2.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
+
+        assert_eq!(p2.date, Some(NaiveDate::from_ymd_opt(2025, 8, 15).unwrap()));
         assert_eq!(p2.time, Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()));
         assert_eq!(p2.title, "Note 2");
-        assert_eq!(p3.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
+
+        assert_eq!(p3.date, Some(NaiveDate::from_ymd_opt(2025, 8, 15).unwrap()));
         assert_eq!(p3.time, Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()));
         assert_eq!(p3.title, "Note 3");
-        assert_eq!(p4.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
+
+        assert_eq!(p4.date, None);
         assert_eq!(p4.time, Some(NaiveTime::from_hms_opt(6, 0, 0).unwrap()));
         assert_eq!(p4.title, "Note 4");
-        assert_eq!(p5.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
+
+        assert_eq!(p5.date, Some(NaiveDate::from_ymd_opt(2025, 8, 15).unwrap()));
         assert_eq!(p5.time, Some(NaiveTime::from_hms_opt(6, 0, 0).unwrap()));
         assert_eq!(p5.title, "Note 5");
     }
@@ -498,7 +457,7 @@ mod tests {
         let p = parse_raw_user_input("My title\nAnd the body.", opts(anchor));
         assert_eq!(p.title, "My title");
         assert_eq!(p.body, "And the body.");
-        assert!(!p.explicit_date);
+        assert!(p.date.is_none());
         assert!(p.time.is_none());
     }
 
@@ -508,7 +467,7 @@ mod tests {
         let p = parse_raw_user_input("My title\nAnd the body.\n### Header 3", opts(anchor));
         assert_eq!(p.title, "My title");
         assert_eq!(p.body, "And the body.\n### Header 3");
-        assert!(!p.explicit_date);
+        assert!(p.date.is_none());
         assert!(p.time.is_none());
     }
 
@@ -516,7 +475,7 @@ mod tests {
     fn date_with_no_title() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
         let p1 = parse_raw_user_input("yesterday at 6am: ", opts(anchor));
-        assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 14).unwrap());
+        assert_eq!(p1.date, Some(NaiveDate::from_ymd_opt(2025, 8, 14).unwrap()));
         assert_eq!(p1.time, Some(NaiveTime::from_hms_opt(6, 0, 0).unwrap()));
         assert_eq!(p1.title, "");
     }
@@ -525,22 +484,20 @@ mod tests {
     fn custom_format_dd_mm_yyyy() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
         let fmts = &["%d-%m-%Y", "%d/%m/%Y"];
-        let custom_opts = Some(ParseOptions {
+        let custom_opts = Some(ParseInputOptions {
             reference_date: Some(anchor),
             formats: Some(fmts),
         });
         let p1 = parse_raw_user_input("01-08-2025: Title 1.", custom_opts);
         let p2 = parse_raw_user_input("01/09/2025: Title 2.", custom_opts);
-        assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 1).unwrap());
+        assert_eq!(p1.date, Some(NaiveDate::from_ymd_opt(2025, 8, 1).unwrap()));
         assert!(p1.time.is_none());
         assert_eq!(p1.title, "Title 1.");
         assert!(p1.body.is_empty());
-        assert!(p1.explicit_date);
-        assert_eq!(p2.date, NaiveDate::from_ymd_opt(2025, 9, 1).unwrap());
+        assert_eq!(p2.date, Some(NaiveDate::from_ymd_opt(2025, 9, 1).unwrap()));
         assert!(p2.time.is_none());
         assert_eq!(p2.title, "Title 2.");
         assert!(p2.body.is_empty());
-        assert!(p2.explicit_date);
     }
 
     #[test]
@@ -559,27 +516,45 @@ mod tests {
 
         // Test parsing of each day of the week relative to the anchor
         let monday = parse_raw_user_input("monday: Task A", p_opts);
-        assert_eq!(monday.date, NaiveDate::from_ymd_opt(2025, 8, 18).unwrap());
+        assert_eq!(
+            monday.date,
+            Some(NaiveDate::from_ymd_opt(2025, 8, 18).unwrap())
+        );
 
         let tuesday = parse_raw_user_input("tuesday: Task B", p_opts);
-        assert_eq!(tuesday.date, NaiveDate::from_ymd_opt(2025, 8, 19).unwrap());
+        assert_eq!(
+            tuesday.date,
+            Some(NaiveDate::from_ymd_opt(2025, 8, 19).unwrap())
+        );
 
         // A day keyword matching the anchor date should return the anchor date
         let wednesday = parse_raw_user_input("wednesday: Task C", p_opts);
-        assert_eq!(wednesday.date, anchor);
+        assert_eq!(wednesday.date, Some(anchor));
 
         // Days from the "previous week" should resolve correctly
         let thursday = parse_raw_user_input("thursday: Task D", p_opts);
-        assert_eq!(thursday.date, NaiveDate::from_ymd_opt(2025, 8, 14).unwrap());
+        assert_eq!(
+            thursday.date,
+            Some(NaiveDate::from_ymd_opt(2025, 8, 14).unwrap())
+        );
 
         let friday = parse_raw_user_input("friday: Task E", p_opts);
-        assert_eq!(friday.date, NaiveDate::from_ymd_opt(2025, 8, 15).unwrap());
+        assert_eq!(
+            friday.date,
+            Some(NaiveDate::from_ymd_opt(2025, 8, 15).unwrap())
+        );
 
         let saturday = parse_raw_user_input("saturday: Task F", p_opts);
-        assert_eq!(saturday.date, NaiveDate::from_ymd_opt(2025, 8, 16).unwrap());
+        assert_eq!(
+            saturday.date,
+            Some(NaiveDate::from_ymd_opt(2025, 8, 16).unwrap())
+        );
 
         let sunday = parse_raw_user_input("sunday: Task G", p_opts);
-        assert_eq!(sunday.date, NaiveDate::from_ymd_opt(2025, 8, 17).unwrap());
+        assert_eq!(
+            sunday.date,
+            Some(NaiveDate::from_ymd_opt(2025, 8, 17).unwrap())
+        );
     }
 
     #[test]

@@ -9,6 +9,7 @@ use crate::keywords::Keywords;
 #[derive(Debug, Deserialize)]
 struct ConfigFile {
     journal_dir: Option<PathBuf>,
+    todo_list_dir: Option<PathBuf>,
     editor: Option<String>,
     default_time: Option<String>,
     journal_date_format: Option<String>,
@@ -24,6 +25,7 @@ struct ConfigFile {
 pub struct Config {
     /// Absolute directory where daily Markdown files live.
     pub journal_dir: PathBuf,
+    pub todo_list_dir: PathBuf,
     /// Preferred editor name/binary (e.g. hx for Helix). Optional; the CLI will fall back to $VISUAL/$EDITOR.
     pub editor: Option<String>,
     /// Entries will be created at this time if you supply a date but not specific time (e.g. `yesterday:`).
@@ -42,6 +44,7 @@ impl Config {
     pub fn load() -> Result<Self> {
         let file_config = Self::read_file_config().unwrap_or_else(|_| ConfigFile {
             journal_dir: None,
+            todo_list_dir: None,
             editor: None,
             default_time: None,
             synonyms: None,
@@ -63,6 +66,10 @@ impl Config {
             .journal_dir
             .unwrap_or_else(Self::default_journal_dir);
 
+        let todo_list_dir = file_config
+            .todo_list_dir
+            .unwrap_or_else(Self::default_todo_list_dir);
+
         let input_date_formats = file_config
             .input_date_formats
             .unwrap_or_else(|| ["%d/%m/%Y".to_string()].to_vec());
@@ -72,6 +79,7 @@ impl Config {
 
         Ok(Self {
             journal_dir,
+            todo_list_dir,
             editor: file_config.editor,
             default_time,
             journal_date_format: date_format,
@@ -90,17 +98,33 @@ impl Config {
         NaiveTime::parse_from_str(time, "%H:%M").ok()
     }
 
-    /// Default journal root: `{data_dir}/lgg`
-    /// - macOS:   `~/Library/Application Support/lgg`
-    /// - Linux:   `$XDG_DATA_HOME/lgg` or `~/.local/share/lgg`
-    /// - Windows: `%APPDATA%\lgg`
+    /// Default journal root: `{data_dir}/lgg/journal`
+    /// - macOS:   `~/Library/Application Support/lgg/journal`
+    /// - Linux:   `$XDG_DATA_HOME/lgg` or `~/.local/share/lgg/journal`
+    /// - Windows: `%APPDATA%\lgg\journal`
     fn default_journal_dir() -> PathBuf {
         if let Some(base) = BaseDirs::new() {
             let mut p = base.data_dir().to_path_buf();
             p.push("lgg");
+            p.push("journal");
             p
         } else {
-            PathBuf::from("./lgg")
+            PathBuf::from("./lgg/journal")
+        }
+    }
+
+    /// Default todo_list root: `{data_dir}/lgg/todos`
+    /// - macOS:   `~/Library/Application Support/lgg/todos`
+    /// - Linux:   `$XDG_DATA_HOME/lgg` or `~/.local/share/lgg/todos`
+    /// - Windows: `%APPDATA%\lgg\todos`
+    fn default_todo_list_dir() -> PathBuf {
+        if let Some(base) = BaseDirs::new() {
+            let mut p = base.data_dir().to_path_buf();
+            p.push("lgg");
+            p.push("todos");
+            p
+        } else {
+            PathBuf::from("./lgg/todos")
         }
     }
 
@@ -127,6 +151,7 @@ impl Config {
         }
         Ok(ConfigFile {
             journal_dir: None,
+            todo_list_dir: None,
             editor: None,
             default_time: None,
             synonyms: None,
@@ -165,9 +190,10 @@ impl Config {
 ///
 /// This is the single source of truth for test configuration.
 /// If you add a field to `Config`, you only need to update it here.
-pub fn mk_config(journal_dir: PathBuf, reference_date: Option<NaiveDate>) -> Config {
+pub fn mk_journal_config(journal_dir: PathBuf, reference_date: Option<NaiveDate>) -> Config {
     Config {
         journal_dir,
+        todo_list_dir: PathBuf::from("./lgg/todos"),
         editor: None,
         default_time: NaiveTime::from_hms_opt(21, 0, 0).expect("valid time"),
         reference_date: reference_date.unwrap_or(Local::now().date_naive()),

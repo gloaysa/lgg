@@ -1,17 +1,10 @@
 //! Parses the content of a daily journal file into structured `Entry` objects.
-use std::collections::HashSet;
-
-use super::journal_entry::ParsedEntry;
+use super::parsed_entry::{ParsedEntry, ReadResult};
 use chrono::{NaiveDate, NaiveTime};
 use regex::Regex;
+use std::collections::HashSet;
 
-#[derive(Debug)]
-pub struct ParseResult {
-    pub entries: Vec<ParsedEntry>,
-    pub errors: Vec<String>,
-}
-
-pub fn parse_file_content(content: &str) -> ParseResult {
+pub fn parse_file_content(content: &str) -> ReadResult {
     let mut entries = Vec::new();
     let mut errors = Vec::new();
     let mut lines = content.lines();
@@ -21,7 +14,7 @@ pub fn parse_file_content(content: &str) -> ParseResult {
             errors.push(
                 "Empty file: expected a date header like `# DATE` on the first line.".to_string(),
             );
-            return ParseResult { entries, errors };
+            return ReadResult { entries, errors };
         }
     };
 
@@ -31,7 +24,7 @@ pub fn parse_file_content(content: &str) -> ParseResult {
             errors.push(
                 format!("Invalid or missing H1 date header: expected first line like `# DATE`, found {header_line}.").to_string(),
             );
-            return ParseResult { entries, errors };
+            return ReadResult { entries, errors };
         }
     };
 
@@ -86,7 +79,7 @@ pub fn parse_file_content(content: &str) -> ParseResult {
             }
         }
     }
-    ParseResult { entries, errors }
+    ReadResult { entries, errors }
 }
 
 /// Parses a `NaiveDate` from a markdown header line.

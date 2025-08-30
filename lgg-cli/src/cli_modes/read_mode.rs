@@ -1,16 +1,16 @@
 use super::CliModeResult;
 use crate::{Cli, render::Renderer};
 use anyhow::Result;
-use lgg_core::{Journal, QueryError, QueryResult, QueryTagsResult, ReadEntriesOptions};
+use lgg_core::{Lgg, QueryError, QueryResult, QueryTagsResult, ReadEntriesOptions};
 
-pub fn read_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<CliModeResult> {
+pub fn read_mode(cli: &Cli, renderer: &Renderer, lgg: &Lgg) -> Result<CliModeResult> {
     let mut start_date: Option<&str> = None;
     let mut end_date: Option<&str> = None;
     let mut time: Option<&str> = None;
     let mut tags: Option<Vec<String>> = None;
 
     if cli.all_tags {
-        let tags = journal.search_all_tags();
+        let tags = lgg.journal.search_all_tags();
         print_results(renderer, &PrintResult::Tags(tags), cli.count);
         return Ok(CliModeResult::Finish);
     }
@@ -51,7 +51,7 @@ pub fn read_mode(cli: &Cli, renderer: &Renderer, journal: &Journal) -> Result<Cl
         tags: cli.tags.as_ref(),
         ..Default::default()
     };
-    let result = journal.read_entries(&options);
+    let result = lgg.journal.read_entries(&options);
     print_results(renderer, &PrintResult::Entries(result), cli.count);
     Ok(CliModeResult::Finish)
 }

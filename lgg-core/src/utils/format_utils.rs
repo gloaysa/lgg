@@ -1,4 +1,4 @@
-use chrono::{Local, NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveTime};
 
 /// Returns an output like this: `# Friday, 15 Aug 2025`
 pub fn format_day_header(date_format: &str, date: NaiveDate) -> String {
@@ -6,9 +6,8 @@ pub fn format_day_header(date_format: &str, date: NaiveDate) -> String {
 }
 
 /// Render an entry block. `# 12:30 - Title\nBody`
-pub fn format_entry_block(title: &str, body: &str, time: Option<NaiveTime>) -> String {
-    let t = time.unwrap_or_else(|| Local::now().time());
-    let time = t.format("%H:%M");
+pub fn format_entry_block(title: &str, body: &str, time: &NaiveTime) -> String {
+    let time = time.format("%H:%M");
     if body.trim().is_empty() {
         format!("## {time} - {title}\n\n")
     } else {
@@ -25,7 +24,7 @@ mod tests {
     #[test]
     fn entry_block_with_body() {
         let t = NaiveTime::from_hms_opt(12, 34, 0).unwrap();
-        let s = format_entry_block("Quiet morning", "Body...", Some(t));
+        let s = format_entry_block("Quiet morning", "Body...", &t);
         assert!(s.starts_with("## 12:34 - Quiet morning\n\nBody...\n\n"));
         assert!(s.ends_with("Body...\n\n"));
     }
@@ -33,7 +32,7 @@ mod tests {
     #[test]
     fn entry_block_without_body() {
         let t = NaiveTime::from_hms_opt(7, 5, 0).unwrap();
-        let s = format_entry_block("Title only", "", Some(t));
+        let s = format_entry_block("Title only", "", &t);
         assert_eq!(s, "## 07:05 - Title only\n\n");
     }
 }

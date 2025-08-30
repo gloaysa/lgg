@@ -1,11 +1,8 @@
 use anyhow::Result;
-use lgg_core::Journal;
 use std::{fs, path::Path, process::Command};
 
-pub fn resolve_editor(j: &Journal) -> Result<String> {
-    let editor = j
-        .config
-        .editor
+pub fn resolve_editor(editor: &Option<String>) -> Result<String> {
+    let editor = editor
         .as_deref()
         .map(str::to_string)
         .or_else(|| std::env::var("VISUAL").ok())

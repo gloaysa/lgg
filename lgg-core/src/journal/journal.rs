@@ -1,22 +1,22 @@
 //! The core `Journal` struct and its associated types, providing the primary API for interaction.
-use super::date_utils::time_is_in_range;
-use super::format_utils::{format_day_header, format_entry_block};
-use super::journal_entry::JournalEntry;
-use super::parse_entries::parse_file_content;
-use super::parse_input::DateFilter::{Range, Single};
-use super::parse_input::{ParseOptions, parse_date_token, parse_raw_user_input, parse_time_token};
-use super::path_utils::{day_file, month_dir, scan_dir_for_md_files, year_dir};
-use crate::config::Config;
+use super::journal_entry::{JournalEntry, JournalWriteEntry};
+use super::journal_paths::{day_file, month_dir, year_dir};
+use crate::utils::date_utils::time_is_in_range;
+use crate::utils::format_utils::{format_day_header, format_entry_block};
+use crate::utils::parse_entries::parse_file_content;
+use crate::utils::parse_input::{parse_date_token, parse_time_token};
+use crate::utils::parsed_entry::DateFilter;
+use crate::utils::parsed_input::ParseInputOptions;
+use crate::utils::path_utils::scan_dir_for_md_files;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
-use chrono::{Datelike, Days, Local, NaiveDate};
+use chrono::{Datelike, Days, NaiveDate, NaiveTime};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 
 /// Represents a non-critical issue that occurred during a query.
-///
 /// This is used to report problems (e.g., malformed files, invalid input)
 /// without stopping a larger query operation.
 #[derive(Debug)]
@@ -25,13 +25,16 @@ pub enum QueryError {
     FileError { path: PathBuf, error: anyhow::Error },
 }
 
-/// The complete result of a query, containing successfully parsed entries and any warnings.
+/// The complete result of a query.
+/// Contains successfully parsed entries and any errors.
 #[derive(Debug)]
 pub struct QueryResult {
     pub entries: Vec<JournalEntry>,
     pub errors: Vec<QueryError>,
 }
 
+/// The complete result of a query.
+/// Contains successfully parsed tags and any errors.
 #[derive(Debug)]
 pub struct QueryTagsResult {
     pub tags: Vec<String>,
@@ -52,24 +55,17 @@ pub struct ReadEntriesOptions<'a> {
 /// reading from and writing to the journal files.
 #[derive(Debug)]
 pub struct Journal {
-    pub config: Config,
+    pub journal_dir: PathBuf,
+    /// Entries will be created at this time if you supply a date but not specific time (e.g. `yesterday:`).
+    /// Valid format is "%H:%M" (e.g. 08:40 or 16:33). Default is 21:00.
+    pub default_time: NaiveTime,
+    pub journal_date_format: String,
+    /// A slice of `chrono` format strings to try for parsing dates.
+    pub input_date_formats: Vec<String>,
+    /// The date to use as "today" for relative keywords.
+    pub reference_date: NaiveDate,
 }
 impl Journal {
-    /// Creates a new `Journal` instance, loading configuration from standard paths.
-    pub fn new() -> Result<Self> {
-        let config = Config::load()?;
-        Self::with_config(config)
-    }
-
-    /// Creates a new `Journal` instance with a specific `Config`.
-    ///
-    /// This also ensures that the journal's root directory exists.
-    pub fn with_config(config: Config) -> Result<Self> {
-        fs::create_dir_all(&config.journal_dir)
-            .with_context(|| format!("creating {}", config.journal_dir.display()))?;
-        Ok(Self { config })
-    }
-
     /// Parses and saves a new entry from a single string.
     ///
     /// - Parses `<date>:` (optional) and title/body from the input string.
@@ -83,36 +79,18 @@ impl Journal {
     /// * `input` - a string with the user's input (eg 'yesterday: I did some coding.').
     /// * `reference_date` - Optional argument that will allow to modify the date of reference for
     /// relatives dates (yesterday, tomorrow...)
-    pub fn create_entry(&self, input: &str) -> Result<JournalEntry> {
-        let format_strs: Vec<&str> = self
-            .config
-            .input_date_formats
-            .iter()
-            .map(AsRef::as_ref)
-            .collect();
-        let opts = ParseOptions {
-            reference_date: Some(self.config.reference_date),
-            formats: Some(&format_strs),
-        };
-        let parsed_input = parse_raw_user_input(input, Some(opts));
-        let date = parsed_input.date;
-        let time = if let Some(t) = parsed_input.time {
-            t
-        } else if parsed_input.explicit_date {
-            self.config.default_time
-        } else {
-            Local::now().time()
-        };
-
-        let day_file = day_file(&self.config.journal_dir, date);
+    pub fn create_entry(&self, input: JournalWriteEntry) -> Result<JournalEntry> {
+        let date = input.date;
+        let time = input.time;
+        let day_file = day_file(&self.journal_dir, date);
         if let Some(parent) = day_file.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("creating parent directory {}", parent.display()))?;
         }
 
         let is_new = !day_file.exists();
-        let header = format_day_header(&self.config.journal_date_format, date);
-        let block = format_entry_block(&parsed_input.title, &parsed_input.body, Some(time));
+        let header = format_day_header(&self.journal_date_format, date);
+        let block = format_entry_block(&input.title, &input.body, &time);
 
         let mut file = OpenOptions::new()
             .create(true)
@@ -130,9 +108,9 @@ impl Journal {
             let new_entry = JournalEntry {
                 date,
                 time,
-                title: parsed_input.title.to_string(),
-                body: parsed_input.body.to_string(),
-                tags: parsed_input.tags.clone(),
+                title: input.title.to_string(),
+                body: input.body.to_string(),
+                tags: input.tags.clone(),
                 path: day_file.clone(),
             };
             let mut result = self.parse_file(&day_file);
@@ -153,7 +131,7 @@ impl Journal {
             result.entries.sort_by_key(|e| e.time);
             let mut new_content = header;
             for entry in result.entries {
-                let block = format_entry_block(&entry.title, &entry.body, Some(entry.time));
+                let block = format_entry_block(&entry.title, &entry.body, &entry.time);
 
                 new_content.push_str(&block);
             }
@@ -164,9 +142,9 @@ impl Journal {
         Ok(JournalEntry {
             date,
             time,
-            title: parsed_input.title,
-            body: parsed_input.body,
-            tags: parsed_input.tags,
+            title: input.title,
+            body: input.body,
+            tags: input.tags,
             path: day_file,
         })
     }
@@ -223,7 +201,7 @@ impl Journal {
         let mut tags: Vec<String> = Vec::new();
         let mut errors = Vec::new();
 
-        if let Ok(files) = scan_dir_for_md_files(&self.config.journal_dir) {
+        if let Ok(files) = scan_dir_for_md_files(&self.journal_dir) {
             for file in files {
                 let parse_result = self.parse_file(&file);
                 for entry in parse_result.entries {
@@ -248,49 +226,12 @@ impl Journal {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
 
-        if let Ok(files) = scan_dir_for_md_files(&self.config.journal_dir) {
+        if let Ok(files) = scan_dir_for_md_files(&self.journal_dir) {
             for file in files {
                 let parse_result = self.parse_file(&file);
                 entries.extend(parse_result.entries);
                 errors.extend(parse_result.errors);
             }
-        }
-
-        QueryResult { entries, errors }
-    }
-
-    fn search_files_by_date(&self, start_date: &str, end_date: Option<&str>) -> QueryResult {
-        let format_strs: Vec<&str> = self
-            .config
-            .input_date_formats
-            .iter()
-            .map(AsRef::as_ref)
-            .collect();
-        let opts = ParseOptions {
-            reference_date: Some(self.config.reference_date),
-            formats: Some(&format_strs),
-        };
-        let mut entries = Vec::new();
-        let mut errors = Vec::new();
-
-        if let Some(date) = parse_date_token(start_date, end_date, Some(opts)) {
-            match date {
-                Single(s_date) => {
-                    let result = self.read_single_date_entry(s_date);
-                    entries = result.entries;
-                    errors = result.errors;
-                }
-                Range(s_date, e_date) => {
-                    let result = self.read_range_date_entry(s_date, e_date);
-                    entries = result.entries;
-                    errors = result.errors;
-                }
-            }
-        } else {
-            errors.push(QueryError::InvalidDate {
-                input: start_date.to_string(),
-                error: "Not a valid date or keyword.".to_string(),
-            });
         }
 
         QueryResult { entries, errors }
@@ -352,10 +293,43 @@ impl Journal {
         QueryResult { entries, errors }
     }
 
+    fn search_files_by_date(&self, start_date: &str, end_date: Option<&str>) -> QueryResult {
+        let format_strs: Vec<&str> = self.input_date_formats.iter().map(AsRef::as_ref).collect();
+        let opts = ParseInputOptions {
+            reference_date: Some(self.reference_date),
+            formats: Some(&format_strs),
+        };
+        let mut entries = Vec::new();
+        let mut errors = Vec::new();
+
+        // TODO: We have to move parse_date_token out of here. This function should take start_date and end_date as NaiveDate, not strings
+        if let Some(date) = parse_date_token(start_date, end_date, Some(opts)) {
+            match date {
+                DateFilter::Single(s_date) => {
+                    let result = self.read_single_date_entry(s_date);
+                    entries = result.entries;
+                    errors = result.errors;
+                }
+                DateFilter::Range(s_date, e_date) => {
+                    let result = self.read_range_date_entry(s_date, e_date);
+                    entries = result.entries;
+                    errors = result.errors;
+                }
+            }
+        } else {
+            errors.push(QueryError::InvalidDate {
+                input: start_date.to_string(),
+                error: "Not a valid date or keyword.".to_string(),
+            });
+        }
+
+        QueryResult { entries, errors }
+    }
+
     fn read_single_date_entry(&self, date: NaiveDate) -> QueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
-        let day_file = day_file(&self.config.journal_dir, date);
+        let day_file = day_file(&self.journal_dir, date);
         if day_file.exists() {
             let parse_result = self.parse_file(&day_file);
             entries.extend(parse_result.entries);
@@ -380,20 +354,20 @@ impl Journal {
         let mut start_date = range_start;
 
         while start_date <= range_end {
-            let year_dir = year_dir(&self.config.journal_dir, start_date);
+            let year_dir = year_dir(&self.journal_dir, start_date);
             if !year_dir.exists() {
                 let next_year = start_date.year() + 1;
                 start_date = NaiveDate::from_ymd_opt(next_year, 1, 1).unwrap();
                 continue;
             }
-            let month_dir = month_dir(&self.config.journal_dir, start_date);
+            let month_dir = month_dir(&self.journal_dir, start_date);
             if !month_dir.exists() {
                 let year = start_date.year();
                 let next_month = start_date.month() + 1;
                 start_date = NaiveDate::from_ymd_opt(year, next_month, 1).unwrap();
                 continue;
             }
-            let day_file = day_file(&self.config.journal_dir, start_date);
+            let day_file = day_file(&self.journal_dir, start_date);
             if day_file.exists() {
                 let parse_result = self.parse_file(&day_file);
                 entries.extend(parse_result.entries);
@@ -410,24 +384,38 @@ impl Journal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::mk_config;
+    use crate::config::mk_journal_config;
+    use chrono::Local;
     use std::fs;
     use tempfile::tempdir;
 
     fn mk_journal_with_default(reference_date: Option<NaiveDate>) -> (Journal, tempfile::TempDir) {
         let tmp = tempdir().unwrap();
         let root = tmp.path().join("lgg");
-        let config = mk_config(root, reference_date);
+        let config = mk_journal_config(root, reference_date);
 
-        let j = Journal::with_config(config).unwrap();
+        let j = Journal {
+            journal_dir: config.journal_dir,
+            default_time: config.default_time,
+            journal_date_format: config.journal_date_format,
+            input_date_formats: config.input_date_formats,
+            reference_date: config.reference_date,
+        };
         (j, tmp)
     }
 
     #[test]
     fn save_entry_creates_day_file_and_appends() {
         let (j, _tmp) = mk_journal_with_default(None);
-        let res = j.create_entry("Test entry. With body.").unwrap();
-        let expected = day_file(&j.config.journal_dir, res.date);
+        let entry = JournalWriteEntry {
+            date: Local::now().date_naive(),
+            time: Local::now().time(),
+            title: "Test entry.".to_string(),
+            body: "With body.".to_string(),
+            tags: Vec::new(),
+        };
+        let res = j.create_entry(entry).unwrap();
+        let expected = day_file(&j.journal_dir, res.date);
         assert_eq!(res.path, expected);
         assert!(res.path.exists());
 
@@ -442,8 +430,22 @@ mod tests {
     #[test]
     fn read_entries_single_date_success() {
         let (j, _tmp) = mk_journal_with_default(None);
-        let _ = j.create_entry("today: First entry.").unwrap();
-        let _ = j.create_entry("today: Second entry.").unwrap();
+        let entry = JournalWriteEntry {
+            date: Local::now().date_naive(),
+            time: Local::now().time(),
+            title: "First entry.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        let entry2 = JournalWriteEntry {
+            date: Local::now().date_naive(),
+            time: Local::now().time(),
+            title: "Second entry.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        let _ = j.create_entry(entry).unwrap();
+        let _ = j.create_entry(entry2).unwrap();
         let options = ReadEntriesOptions {
             start_date: Some("today"),
             ..Default::default()
@@ -460,12 +462,50 @@ mod tests {
     fn read_entries_date_range_success() {
         let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // Monday
         let (j, _tmp) = mk_journal_with_default(Some(anchor));
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2025, 07, 27).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Previous week".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
 
-        j.create_entry("27/07/2025: Previous week").unwrap();
-        j.create_entry("saturday: First entry.").unwrap();
-        j.create_entry("yesterday: Second entry!").unwrap();
-        j.create_entry("today: This week?").unwrap();
-        j.create_entry("11/08/2025: Next week").unwrap();
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2025, 08, 02).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "First entry.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2025, 08, 03).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Second entry!".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: anchor,
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "This week?".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2025, 08, 11).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Next week".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
 
         let options = ReadEntriesOptions {
             start_date: Some("last week"),
@@ -491,13 +531,50 @@ mod tests {
         let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // Monday
         let (j, _tmp) = mk_journal_with_default(Some(anchor));
 
-        j.create_entry("today at morning: Morning entry").unwrap();
-        j.create_entry("today at night: Night entry.").unwrap();
-        j.create_entry("today at night: Second night entry!")
-            .unwrap();
-        j.create_entry("today at noon: Noon entry").unwrap();
-        j.create_entry("today at morning: Another morning entry.")
-            .unwrap();
+        let entry = JournalWriteEntry {
+            date: anchor,
+            time: NaiveTime::from_hms_opt(06, 00, 00).unwrap(),
+            title: "Morning entry".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: anchor,
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Night entry.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: anchor,
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Second night entry!".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: anchor,
+            time: NaiveTime::from_hms_opt(12, 00, 00).unwrap(),
+            title: "Noon entry".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: anchor,
+            time: NaiveTime::from_hms_opt(07, 00, 00).unwrap(),
+            title: "Another morning entry.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
 
         let options = ReadEntriesOptions {
             start_date: Some("today"),
@@ -527,13 +604,41 @@ mod tests {
         let (j, _tmp) = mk_journal_with_default(Some(anchor));
         let expected_tags: Vec<String> = vec!["@test".to_string()];
 
-        j.create_entry("27/07/2025: Previous week with @test tag")
-            .unwrap();
-        j.create_entry("today: This week with @test tag").unwrap();
-        j.create_entry("tomorrow: This week with @test tag too.")
-            .unwrap();
-        j.create_entry("11/08/2025: Next week with @test tag.")
-            .unwrap();
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2025, 07, 27).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "27/07/2025: Previous week with @test tag".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "This week with @test tag".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2025, 08, 05).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "This week with @test tag too.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2025, 08, 11).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Next week with @test tag.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
 
         let options = ReadEntriesOptions {
             start_date: Some("this week"),
@@ -558,13 +663,41 @@ mod tests {
             "@double_tag".to_string(),
         ];
 
-        j.create_entry("27/07/2020: Day in the past with @past tag.")
-            .unwrap();
-        j.create_entry("27/07/2048: Day way in the future with @future. Has @double_tag in body.")
-            .unwrap();
-        j.create_entry("yesterday: Has a tag in body. This is another @double_tag")
-            .unwrap();
-        j.create_entry("today: No tag.").unwrap();
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2020, 07, 27).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Day in the past with @past tag.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2048, 07, 27).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Day way in the future with @future. Has @double_tag in body.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2025, 08, 03).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Has a tag in body. This is another @double_tag".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2048, 08, 04).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "No tag.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
 
         let options = ReadEntriesOptions {
             tags: Some(&expected_tags),
@@ -590,12 +723,32 @@ mod tests {
         let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // A day in 2025
         let (j, _tmp) = mk_journal_with_default(Some(anchor));
 
-        j.create_entry("27/07/2020: Day in the past with @past tag.")
-            .unwrap();
-        j.create_entry("27/07/2048: Day way in the future with @future. Has @double_tag in body.")
-            .unwrap();
-        j.create_entry("yesterday: Has a tag in body. This is another @double_tag")
-            .unwrap();
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2020, 07, 27).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Day in the past with @past tag.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2048, 07, 27).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Day way in the future with @future. Has @double_tag in body.".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
+
+        let entry = JournalWriteEntry {
+            date: NaiveDate::from_ymd_opt(2025, 08, 03).unwrap(),
+            time: NaiveTime::from_hms_opt(21, 00, 00).unwrap(),
+            title: "Has a tag in body. This is another @double_tag".to_string(),
+            body: "".to_string(),
+            tags: Vec::new(),
+        };
+        j.create_entry(entry).unwrap();
 
         let results = j.search_all_tags();
         assert!(results.errors.is_empty());
@@ -635,7 +788,7 @@ mod tests {
     fn read_entries_with_malformed_file() {
         let (j, _tmp) = mk_journal_with_default(None);
         let date = Local::now().date_naive();
-        let path = day_file(&j.config.journal_dir, date);
+        let path = day_file(&j.journal_dir, date);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, "this file is not valid").unwrap();
 
