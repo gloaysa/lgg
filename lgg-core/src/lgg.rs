@@ -1,11 +1,12 @@
 use crate::{
+    Config,
     journal::Journal,
+    todo_list::TodoList,
     utils::{
         parse_input::{parse_date_token, parse_raw_user_input},
         parsed_entry::DateFilter,
         parsed_input::ParseInputOptions,
     },
-    Config,
 };
 use anyhow::{Context, Result};
 use chrono::{Local, NaiveDate, NaiveTime};
@@ -21,6 +22,7 @@ pub struct ParsedInput {
 pub struct Lgg {
     pub config: Config,
     pub journal: Journal,
+    pub todos: TodoList,
 }
 impl Lgg {
     /// Creates a new `Lgg` instance, loading configuration from standard paths.
@@ -40,12 +42,15 @@ impl Lgg {
 
         let journal = Journal {
             journal_dir: config.journal_dir.clone(),
-            default_time: config.default_time,
             journal_date_format: config.journal_date_format.clone(),
-            input_date_formats: config.input_date_formats.clone(),
             reference_date: config.reference_date,
         };
-        Ok(Self { config, journal })
+        let todos = TodoList {};
+        Ok(Self {
+            config,
+            journal,
+            todos,
+        })
     }
 
     /// This function orchestrates the parsing of a complete user input, which may

@@ -9,7 +9,7 @@ use crate::utils::parsed_entry::DateFilter;
 use crate::utils::path_utils::scan_dir_for_md_files;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
-use chrono::{Datelike, Days, NaiveDate, NaiveTime};
+use chrono::{Datelike, Days, NaiveDate};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -54,29 +54,14 @@ pub struct ReadEntriesOptions<'a> {
 #[derive(Debug)]
 pub struct Journal {
     pub journal_dir: PathBuf,
-    /// Entries will be created at this time if you supply a date but not specific time (e.g. `yesterday:`).
-    /// Valid format is "%H:%M" (e.g. 08:40 or 16:33). Default is 21:00.
-    pub default_time: NaiveTime,
     pub journal_date_format: String,
-    /// A slice of `chrono` format strings to try for parsing dates.
-    pub input_date_formats: Vec<String>,
     /// The date to use as "today" for relative keywords.
     pub reference_date: NaiveDate,
 }
 impl Journal {
     /// Parses and saves a new entry from a single string.
-    ///
-    /// - Parses `<date>:` (optional) and title/body from the input string.
-    /// - Ensures the target directory (`{root}/YYYY/MM/`) exists.
-    /// - Creates or appends to the daily file (`{root}/YYYY/MM/YYYY-MM-DD.md`).
-    ///
-    /// Returns an [`EntryRef`] with metadata about the saved entry.
-    ///
-    /// # Arguments
-    ///
-    /// * `input` - a string with the user's input (eg 'yesterday: I did some coding.').
-    /// * `reference_date` - Optional argument that will allow to modify the date of reference for
-    /// relatives dates (yesterday, tomorrow...)
+    /// Creates or appends to the daily file (`{root}/YYYY/MM/YYYY-MM-DD.md`).
+    /// Returns an [`JournalEntry`] with metadata about the saved entry.
     pub fn create_entry(&self, input: JournalWriteEntry) -> Result<JournalEntry> {
         let date = input.date;
         let time = input.time;
@@ -359,7 +344,7 @@ impl Journal {
 mod tests {
     use super::*;
     use crate::config::mk_journal_config;
-    use chrono::Local;
+    use chrono::{Local, NaiveTime};
     use std::fs;
     use tempfile::tempdir;
 
@@ -370,9 +355,7 @@ mod tests {
 
         let j = Journal {
             journal_dir: config.journal_dir,
-            default_time: config.default_time,
             journal_date_format: config.journal_date_format,
-            input_date_formats: config.input_date_formats,
             reference_date: config.reference_date,
         };
         (j, tmp)

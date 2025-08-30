@@ -10,3 +10,11 @@ pub struct TodoEntry {
     pub body: String,
     pub path: PathBuf,
 }
+
+pub struct TodoWriteEntry {
+    pub due_date: NaiveDate,
+    pub time: NaiveTime,
+    pub title: String,
+    pub body: String,
+    pub tags: Vec<String>,
+}
