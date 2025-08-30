@@ -2,5 +2,5 @@
 strip = true
 
 [workspace]
-members = ["lgg-core", "lgg"]
+members = ["lgg-core", "lgg-cli"]
 resolver = "2"
