@@ -1,7 +1,11 @@
 [package]
 name = "lgg-cli"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
+
+[[bin]]
+name = "lgg"
+path = "src/main.rs"
 
 [dependencies]
 lgg-core = { path = "../lgg-core" }
