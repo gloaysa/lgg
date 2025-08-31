@@ -1,5 +1,7 @@
 //! The core `Journal` struct and its associated types, providing the primary API for interaction.
-use super::journal_entry::{JournalEntry, JournalWriteEntry};
+use super::journal_entry::{
+    JournalEntry, JournalWriteEntry, QueryError, QueryResult, QueryTagsResult, ReadEntriesOptions,
+};
 use super::journal_paths::{day_file, month_dir, year_dir};
 use crate::utils::date_utils::time_is_in_range;
 use crate::utils::format_utils::{format_day_header, format_entry_block};
@@ -14,38 +16,6 @@ use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-
-/// Represents a non-critical issue that occurred during a query.
-/// This is used to report problems (e.g., malformed files, invalid input)
-/// without stopping a larger query operation.
-#[derive(Debug)]
-pub enum QueryError {
-    InvalidDate { input: String, error: String },
-    FileError { path: PathBuf, error: anyhow::Error },
-}
-
-/// The complete result of a query.
-/// Contains successfully parsed entries and any errors.
-#[derive(Debug)]
-pub struct QueryResult {
-    pub entries: Vec<JournalEntry>,
-    pub errors: Vec<QueryError>,
-}
-
-/// The complete result of a query.
-/// Contains successfully parsed tags and any errors.
-#[derive(Debug)]
-pub struct QueryTagsResult {
-    pub tags: Vec<String>,
-    pub errors: Vec<QueryError>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct ReadEntriesOptions<'a> {
-    pub dates: Option<DateFilter>,
-    pub time: Option<&'a str>,
-    pub tags: Option<&'a Vec<String>>,
-}
 
 /// The central struct for all journal operations.
 ///
