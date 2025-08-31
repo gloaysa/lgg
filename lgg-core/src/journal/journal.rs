@@ -343,15 +343,15 @@ impl Journal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::mk_journal_config;
+    use crate::tests::mk_config;
     use chrono::{Local, NaiveTime};
     use std::fs;
     use tempfile::tempdir;
 
     fn mk_journal_with_default(reference_date: Option<NaiveDate>) -> (Journal, tempfile::TempDir) {
         let tmp = tempdir().unwrap();
-        let root = tmp.path().join("lgg");
-        let config = mk_journal_config(root, reference_date);
+        let root = tmp.path().join("lgg/journal");
+        let config = mk_config(root, reference_date);
 
         let j = Journal {
             journal_dir: config.journal_dir,

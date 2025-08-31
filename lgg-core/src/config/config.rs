@@ -1,10 +1,9 @@
+use crate::keywords::Keywords;
 use anyhow::{Context, Result};
 use chrono::{Local, NaiveDate, NaiveTime};
 use directories::BaseDirs;
 use serde::Deserialize;
 use std::{collections::HashMap, fs, path::PathBuf};
-
-use crate::keywords::Keywords;
 
 #[derive(Debug, Deserialize)]
 struct ConfigFile {
@@ -190,7 +189,8 @@ impl Config {
 ///
 /// This is the single source of truth for test configuration.
 /// If you add a field to `Config`, you only need to update it here.
-pub fn mk_journal_config(journal_dir: PathBuf, reference_date: Option<NaiveDate>) -> Config {
+#[cfg(test)]
+pub fn mk_config(journal_dir: PathBuf, reference_date: Option<NaiveDate>) -> Config {
     Config {
         journal_dir,
         todo_list_dir: PathBuf::from("./lgg/todos"),

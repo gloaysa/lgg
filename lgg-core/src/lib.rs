@@ -2,6 +2,7 @@ mod config;
 mod journal;
 mod keywords;
 mod lgg;
+mod tests;
 mod todo_list;
 mod utils;
 
