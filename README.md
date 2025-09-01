@@ -163,6 +163,7 @@ journal_dir = "/path/to/your/journal"
 # If not set, a default directory is chosen based on your OS.
 # You can see the active path by running `todo --path`.
 todo_list_dir = "/path/to/your/todos"
+
 # The command to use for the editor when running `lgg` with no text.
 # If not set, it falls back to $VISUAL, then $EDITOR, then "vim".
 editor = "hx"
@@ -179,8 +180,9 @@ journal_date_format = "%A, %d %b %Y" # e.g., "Friday, 15 Aug 2025"
 # The format for date time in due_date & done_date of todos.
 # If you don't want the time to appear, change it to "%d/%m/%Y"
 todo_datetime_format = "%d/%m/%Y %H:%M"
+
 # The different formats you want to use for the date
-# when creating new entries or searching for them.
+# when searching for entries.
 # Uses chrono's strftime format specifiers.
 # See: https://docs.rs/chrono/latest/chrono/format/strftime/
 input_date_formats = ["%d/%m/%Y", "%d%m%Y"]
