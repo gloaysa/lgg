@@ -17,6 +17,8 @@ pub struct ParsedInput {
     pub time: NaiveTime,
     pub title: String,
     pub body: String,
+    pub explicit_date: bool,
+    pub explicit_time: bool,
 }
 
 pub struct Lgg {
@@ -45,7 +47,12 @@ impl Lgg {
             journal_date_format: config.journal_date_format.clone(),
             reference_date: config.reference_date,
         };
-        let todos = TodoList {};
+        let todos = TodoList {
+            todo_list_dir: config.todo_list_dir.clone(),
+            todo_datetime_format: config.todo_datetime_format.clone(),
+            reference_date: config.reference_date,
+            default_time: config.default_time,
+        };
         Ok(Self {
             config,
             journal,
@@ -58,6 +65,8 @@ impl Lgg {
     /// the prefix from the content and then the title from the body.
     /// The input would look something like this: `(optional DATE-TIME): some title. some body.`
     pub fn parse_user_input(&self, input: &str) -> Result<ParsedInput> {
+        let mut explicit_date = false;
+        let mut explicit_time = false;
         let format_strs: Vec<&str> = self
             .config
             .input_date_formats
@@ -69,8 +78,14 @@ impl Lgg {
             formats: Some(&format_strs),
         };
         let parsed_input = parse_raw_user_input(input, Some(opts));
-        let date = parsed_input.date.unwrap_or(self.config.reference_date);
+        let date = if let Some(d) = parsed_input.date {
+            exlicit_date = true;
+            d
+        } else {
+            self.config.reference_date
+        };
         let time = if let Some(t) = parsed_input.time {
+            explicit_time = true;
             t
         } else {
             match parsed_input.date {
@@ -84,6 +99,8 @@ impl Lgg {
             time,
             title: parsed_input.title,
             body: parsed_input.body,
+            explicit_date,
+            explicit_time,
         })
     }
 
@@ -147,6 +164,18 @@ mod tests {
     }
 
     #[test]
+    fn natural_language_date_with_no_time() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 8, 15);
+        let (lgg, _) = mk_lgg_with_default(anchor);
+
+        let p1 = lgg.parse_user_input("yesterday: Note 1").expect("ok");
+
+        assert_eq!(p1.date, NaiveDate::from_ymd_opt(2025, 8, 14).unwrap());
+        assert_eq!(p1.time, NaiveTime::from_hms_opt(21, 0, 0).unwrap());
+        assert_eq!(p1.title, "Note 1");
+    }
+
+    #[test]
     fn no_date_no_time_defaults() {
         let anchor = NaiveDate::from_ymd_opt(2025, 8, 15);
         let now = Local::now().time();
@@ -176,6 +205,7 @@ mod tests {
             default_time,
             reference_date: anchor,
             journal_date_format: "%A, %d %b %Y".to_string(),
+            todo_datetime_format: "%d/%b/%Y %H:%M".to_string(),
             input_date_formats: fmts,
         };
         let lgg = Lgg::with_config(conf).expect("lgg created");

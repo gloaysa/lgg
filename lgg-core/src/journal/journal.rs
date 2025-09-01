@@ -4,7 +4,7 @@ use super::journal_entry::{
 };
 use super::journal_paths::{day_file, month_dir, year_dir};
 use crate::utils::date_utils::time_is_in_range;
-use crate::utils::format_utils::{format_day_header, format_entry_block};
+use crate::utils::format_utils::{format_day_header, format_journal_entry_block};
 use crate::utils::parse_entries::parse_file_content;
 use crate::utils::parse_input::parse_time_token;
 use crate::utils::parsed_entry::DateFilter;
@@ -43,7 +43,7 @@ impl Journal {
 
         let is_new = !day_file.exists();
         let header = format_day_header(&self.journal_date_format, date);
-        let block = format_entry_block(&input.title, &input.body, &time);
+        let block = format_journal_entry_block(&input.title, &input.body, &time);
 
         let mut file = OpenOptions::new()
             .create(true)
@@ -84,7 +84,7 @@ impl Journal {
             result.entries.sort_by_key(|e| e.time);
             let mut new_content = header;
             for entry in result.entries {
-                let block = format_entry_block(&entry.title, &entry.body, &entry.time);
+                let block = format_journal_entry_block(&entry.title, &entry.body, &entry.time);
 
                 new_content.push_str(&block);
             }

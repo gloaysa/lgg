@@ -12,6 +12,7 @@ struct ConfigFile {
     editor: Option<String>,
     default_time: Option<String>,
     journal_date_format: Option<String>,
+    todo_datetime_format: Option<String>,
     input_date_formats: Option<Vec<String>>,
     /// Optional table:
     /// [synonyms]
@@ -30,8 +31,11 @@ pub struct Config {
     /// Entries will be created at this time if you supply a date but not specific time (e.g. `yesterday:`).
     /// Valid format is "%H:%M" (e.g. 08:40 or 16:33). Default is 21:00.
     pub default_time: NaiveTime,
+    /// Format for date header in journal daily file
     pub journal_date_format: String,
-    /// A slice of `chrono` format strings to try for parsing dates.
+    /// Format for date time in due_date & done_date of todos
+    pub todo_datetime_format: String,
+    /// A slice of `chrono` format strings to try when reading entries.
     pub input_date_formats: Vec<String>,
     /// The date to use as "today" for relative keywords.
     pub reference_date: NaiveDate,
@@ -48,6 +52,7 @@ impl Config {
             default_time: None,
             synonyms: None,
             journal_date_format: None,
+            todo_datetime_format: None,
             input_date_formats: None,
         });
 
@@ -60,6 +65,10 @@ impl Config {
         let date_format = file_config
             .journal_date_format
             .unwrap_or_else(|| "%A, %d %b %Y".to_string());
+
+        let todo_datetime_format = file_config
+            .todo_datetime_format
+            .unwrap_or_else(|| "%d/%m/%Y %H:%M)".to_string());
 
         let journal_dir = file_config
             .journal_dir
@@ -82,6 +91,7 @@ impl Config {
             editor: file_config.editor,
             default_time,
             journal_date_format: date_format,
+            todo_datetime_format,
             input_date_formats,
             reference_date: Local::now().date_naive(),
         })
@@ -155,6 +165,7 @@ impl Config {
             default_time: None,
             synonyms: None,
             journal_date_format: None,
+            todo_datetime_format: None,
             input_date_formats: None,
         })
     }
@@ -198,6 +209,7 @@ pub fn mk_config(journal_dir: PathBuf, reference_date: Option<NaiveDate>) -> Con
         default_time: NaiveTime::from_hms_opt(21, 0, 0).expect("valid time"),
         reference_date: reference_date.unwrap_or(Local::now().date_naive()),
         journal_date_format: "%A, %d %b %Y".to_string(),
+        todo_datetime_format: "%d/%b/%Y %H:%M".to_string(),
         input_date_formats: ["%d/%m/%Y".to_string()].to_vec(),
     }
 }
