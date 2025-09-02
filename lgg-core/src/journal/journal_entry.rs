@@ -1,7 +1,7 @@
 use chrono::{NaiveDate, NaiveTime};
 use std::path::PathBuf;
 
-use crate::utils::parsed_entry::DateFilter;
+use crate::utils::date_utils::DateFilter;
 
 #[derive(Debug)]
 pub struct JournalEntry {

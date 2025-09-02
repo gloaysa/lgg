@@ -1,16 +1,16 @@
 use crate::{
-    Config,
     journal::Journal,
-    todo_list::TodoList,
+    todos::Todos,
     utils::{
         parse_input::{parse_date_token, parse_raw_user_input},
-        parsed_entry::DateFilter,
         parsed_input::ParseInputOptions,
     },
+    Config,
 };
 use anyhow::{Context, Result};
 use chrono::{Local, NaiveDate, NaiveTime};
 use std::fs;
+use crate::utils::date_utils::DateFilter;
 
 pub struct ParsedInput {
     pub date: NaiveDate,
@@ -24,7 +24,7 @@ pub struct ParsedInput {
 pub struct Lgg {
     pub config: Config,
     pub journal: Journal,
-    pub todos: TodoList,
+    pub todos: Todos,
 }
 impl Lgg {
     /// Creates a new `Lgg` instance, loading configuration from standard paths.
@@ -47,7 +47,7 @@ impl Lgg {
             journal_date_format: config.journal_date_format.clone(),
             reference_date: config.reference_date,
         };
-        let todos = TodoList {
+        let todos = Todos {
             todo_list_dir: config.todo_list_dir.clone(),
             todo_datetime_format: config.todo_datetime_format.clone(),
             reference_date: config.reference_date,
@@ -121,7 +121,7 @@ impl Lgg {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Config, Lgg, tests::mk_config};
+    use crate::{tests::mk_config, Config, Lgg};
     use chrono::{Local, NaiveDate, NaiveTime, Timelike};
     use tempfile::tempdir;
 

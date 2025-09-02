@@ -1,9 +1,9 @@
-use super::{
-    parsed_entry::{DateFilter, TimeFilter},
-    parsed_input::{ParseInputOptions, ParsedInput},
-};
+use super::parsed_input::{ParseInputOptions, ParsedInput};
 use crate::keywords::{Keyword, Keywords};
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
+use regex::Regex;
+use std::collections::HashSet;
+use crate::utils::date_utils::{DateFilter, TimeFilter};
 
 /// Default accepted input date formats (parsing only).
 const DEFAULT_FORMATS: &[&str] = &["%d/%m/%Y"];
@@ -760,4 +760,18 @@ mod tests {
             )
         );
     }
+}
+
+/// Finds words starting with # or @
+/// Matches one or more letters, numbers, or underscores.
+pub fn extract_tags(text: &str) -> Vec<String> {
+    let re = Regex::new(r"[@#]\w+").unwrap();
+    let mut tags: Vec<String> = re
+        .find_iter(text)
+        .map(|mat| mat.as_str().to_string().trim().to_ascii_lowercase())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    tags.sort();
+    tags
 }

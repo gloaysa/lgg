@@ -1,6 +1,4 @@
-use chrono::{NaiveTime, Timelike};
-
-use super::parsed_entry::TimeFilter;
+use chrono::{NaiveDate, NaiveTime, Timelike};
 
 /// Check whether `time` satisfies the time filter.
 /// - `Single(s)`: matches any time WITHIN the hour.
@@ -16,6 +14,20 @@ pub fn time_is_in_range(filter: TimeFilter, time: NaiveTime) -> bool {
             }
         }
     }
+}
+
+/// The result of parsing a date string, which can be a single day or a range.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum DateFilter {
+    Single(NaiveDate),
+    Range(NaiveDate, NaiveDate),
+}
+
+/// The result of parsing a time string, which can be a single time or a range.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum TimeFilter {
+    Single(NaiveTime),
+    Range(NaiveTime, NaiveTime),
 }
 
 #[cfg(test)]

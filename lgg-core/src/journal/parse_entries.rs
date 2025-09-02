@@ -1,8 +1,7 @@
 //! Parses the content of a daily journal file into structured `Entry` objects.
-use super::parsed_entry::{ParsedJournalEntry, ReadJournalResult};
+use crate::journal::parsed_entry::{ParsedJournalEntry, ReadJournalResult};
 use chrono::{NaiveDate, NaiveTime};
-use regex::Regex;
-use std::collections::HashSet;
+use crate::utils::parse_input;
 
 pub fn parse_journal_file_content(content: &str) -> ReadJournalResult {
     let mut entries = Vec::new();
@@ -38,7 +37,7 @@ pub fn parse_journal_file_content(content: &str) -> ReadJournalResult {
         if let Some(newline_pos) = block.find('\n') {
             let heading = &block[..newline_pos];
             let body = block[newline_pos..].trim().to_string();
-            let tags = extract_tags(&block);
+            let tags = parse_input::extract_tags(&block);
 
             match heading.find(" - ") {
                 Some(separator_pos) => {
@@ -66,7 +65,7 @@ pub fn parse_journal_file_content(content: &str) -> ReadJournalResult {
             if let Some(separator_pos) = block.find(" - ") {
                 let time_str = block[..separator_pos].trim();
                 let title = block[separator_pos + 3..].trim().to_string();
-                let tags = extract_tags(&title);
+                let tags = parse_input::extract_tags(&title);
                 if let Ok(time) = NaiveTime::parse_from_str(time_str, "%H:%M") {
                     entries.push(ParsedJournalEntry {
                         date,
@@ -92,20 +91,6 @@ fn parse_date_from_header_line(line: &str) -> Option<NaiveDate> {
     line.trim()
         .strip_prefix("# ")
         .and_then(|date_str| NaiveDate::parse_from_str(date_str, "%A, %d %b %Y").ok())
-}
-
-/// Finds words starting with # or @
-/// Matches one or more letters, numbers, or underscores.
-pub fn extract_tags(text: &str) -> Vec<String> {
-    let re = Regex::new(r"[@#]\w+").unwrap();
-    let mut tags: Vec<String> = re
-        .find_iter(text)
-        .map(|mat| mat.as_str().to_string().trim().to_ascii_lowercase())
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect();
-    tags.sort();
-    tags
 }
 
 #[cfg(test)]

@@ -4,10 +4,10 @@ use super::journal_entry::{
 };
 use super::journal_paths::{day_file, month_dir, year_dir};
 use crate::utils::date_utils::time_is_in_range;
-use crate::utils::format_utils::{format_day_header, format_journal_entry_block};
-use crate::utils::parse_entries::parse_journal_file_content;
+use crate::journal::format_utils::{format_day_header, format_journal_entry_block};
+use crate::journal::parse_entries::parse_journal_file_content;
 use crate::utils::parse_input::parse_time_token;
-use crate::utils::parsed_entry::DateFilter;
+use crate::utils::date_utils::DateFilter;
 use crate::utils::path_utils::scan_dir_for_md_files;
 use anyhow::anyhow;
 use anyhow::{Context, Result};
