@@ -1,13 +1,13 @@
 use chrono::{NaiveDate, NaiveTime};
 
 #[derive(Debug)]
-pub struct ReadResult {
-    pub entries: Vec<ParsedEntry>,
+pub struct ReadJournalResult {
+    pub entries: Vec<ParsedJournalEntry>,
     pub errors: Vec<String>,
 }
 
 #[derive(Debug)]
-pub struct ParsedEntry {
+pub struct ParsedJournalEntry {
     pub date: NaiveDate,
     pub time: NaiveTime,
     pub title: String,

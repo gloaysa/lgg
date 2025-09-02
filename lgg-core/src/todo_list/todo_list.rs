@@ -1,11 +1,14 @@
-use crate::utils::format_utils::format_todo_entry_block;
-
 use super::{
-    todo_entry::{TodoEntry, TodoStatus, TodoWriteEntry},
+    parse_todos::parse_todo_file_content,
+    todo_entry::{
+        ReadTodoOptions, TodoEntry, TodoQueryError, TodoQueryResult, TodoStatus, TodoWriteEntry,
+    },
     todo_list_paths::pending_todos_file,
 };
+use crate::utils::format_utils::format_todo_entry_block;
+use anyhow::anyhow;
 use anyhow::{Context, Result};
-use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use std::io::Write;
 use std::{
     fs::{self, OpenOptions},
@@ -70,6 +73,97 @@ impl TodoList {
             status: TodoStatus::Pending,
             tags: input.tags,
         })
+    }
+
+    /// Reads and returns all entries, the results can be filtered by `options`.
+    /// This is the primary query function for retrieving todos. It is designed to be
+    /// resilient, returning a [`TodoQueryResult `] that contains both parsed entries and
+    /// any errors that occurred.
+    pub fn read_entries(&self, options: &ReadTodoOptions) -> TodoQueryResult {
+        let mut entries = Vec::new();
+        let mut errors = Vec::new();
+        let pending_file = pending_todos_file(&self.todo_list_dir);
+        if pending_file.exists() {}
+        /* if let Some(dates) = options.due_date {
+            match dates {
+                DateFilter::Single(s_date) => {
+                    let result = self.read_single_date_entry(s_date);
+                    entries.extend(result.entries);
+                    errors.extend(result.errors);
+                }
+                DateFilter::Range(s_date, e_date) => {
+                    let result = self.read_range_date_entry(s_date, e_date);
+                    entries.extend(result.entries);
+                    errors.extend(result.errors);
+                }
+            }
+        } else {
+            let results = self.search_all_files();
+            entries.extend(results.entries);
+            errors.extend(results.errors);
+        } */
+        let results = self.parse_file(&pending_file);
+
+        entries.extend(results.entries);
+        errors.extend(results.errors);
+
+        entries.sort_by_key(|k| k.due_date);
+
+        if let Some(tags) = &options.tags {
+            let found_tags: Vec<String> = tags
+                .into_iter()
+                .map(|t| t.trim().to_ascii_lowercase())
+                .collect();
+
+            entries = entries
+                .into_iter()
+                .filter(|e| found_tags.iter().any(|t| e.tags.contains(t)))
+                .collect();
+        }
+
+        TodoQueryResult { entries, errors }
+    }
+
+    pub fn parse_file(&self, path: &PathBuf) -> TodoQueryResult {
+        let mut entries = Vec::new();
+        let mut errors = Vec::new();
+        if !path.exists() {
+            errors.push(TodoQueryError::FileError {
+                path: path.clone(),
+                error: anyhow!(format!("File does not exist in path: {}", path.display())),
+            });
+            return TodoQueryResult { entries, errors };
+        }
+        match fs::read_to_string(&path) {
+            Ok(file_content) => {
+                let parse_result = parse_todo_file_content(&file_content);
+                for entry in parse_result.entries {
+                    entries.push(TodoEntry {
+                        due_date: entry.due_date,
+                        done_date: entry.done_date,
+                        title: entry.title,
+                        body: entry.body,
+                        tags: entry.tags,
+                        status: entry.status,
+                        path: path.clone(),
+                    });
+                }
+
+                for error in parse_result.errors {
+                    errors.push(TodoQueryError::FileError {
+                        path: path.clone(),
+                        error: anyhow!(error),
+                    });
+                }
+            }
+            Err(error) => {
+                errors.push(TodoQueryError::FileError {
+                    path: path.clone(),
+                    error: error.into(),
+                });
+            }
+        }
+        TodoQueryResult { entries, errors }
     }
 }
 

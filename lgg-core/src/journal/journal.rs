@@ -5,7 +5,7 @@ use super::journal_entry::{
 use super::journal_paths::{day_file, month_dir, year_dir};
 use crate::utils::date_utils::time_is_in_range;
 use crate::utils::format_utils::{format_day_header, format_journal_entry_block};
-use crate::utils::parse_entries::parse_file_content;
+use crate::utils::parse_entries::parse_journal_file_content;
 use crate::utils::parse_input::parse_time_token;
 use crate::utils::parsed_entry::DateFilter;
 use crate::utils::path_utils::scan_dir_for_md_files;
@@ -226,7 +226,7 @@ impl Journal {
         }
         match fs::read_to_string(&path) {
             Ok(file_content) => {
-                let parse_result = parse_file_content(&file_content);
+                let parse_result = parse_journal_file_content(&file_content);
                 for entry in parse_result.entries {
                     entries.push(JournalEntry {
                         date: entry.date,

@@ -1,10 +1,10 @@
 //! Parses the content of a daily journal file into structured `Entry` objects.
-use super::parsed_entry::{ParsedEntry, ReadResult};
+use super::parsed_entry::{ParsedJournalEntry, ReadJournalResult};
 use chrono::{NaiveDate, NaiveTime};
 use regex::Regex;
 use std::collections::HashSet;
 
-pub fn parse_file_content(content: &str) -> ReadResult {
+pub fn parse_journal_file_content(content: &str) -> ReadJournalResult {
     let mut entries = Vec::new();
     let mut errors = Vec::new();
     let mut lines = content.lines();
@@ -14,7 +14,7 @@ pub fn parse_file_content(content: &str) -> ReadResult {
             errors.push(
                 "Empty file: expected a date header like `# DATE` on the first line.".to_string(),
             );
-            return ReadResult { entries, errors };
+            return ReadJournalResult { entries, errors };
         }
     };
 
@@ -24,7 +24,7 @@ pub fn parse_file_content(content: &str) -> ReadResult {
             errors.push(
                 format!("Invalid or missing H1 date header: expected first line like `# DATE`, found {header_line}.").to_string(),
             );
-            return ReadResult { entries, errors };
+            return ReadJournalResult { entries, errors };
         }
     };
 
@@ -46,7 +46,7 @@ pub fn parse_file_content(content: &str) -> ReadResult {
                     let title = heading[separator_pos + 3..].trim().to_string();
 
                     match NaiveTime::parse_from_str(time_str, "%H:%M") {
-                        Ok(time) => entries.push(ParsedEntry {
+                        Ok(time) => entries.push(ParsedJournalEntry {
                             date,
                             time,
                             title,
@@ -68,7 +68,7 @@ pub fn parse_file_content(content: &str) -> ReadResult {
                 let title = block[separator_pos + 3..].trim().to_string();
                 let tags = extract_tags(&title);
                 if let Ok(time) = NaiveTime::parse_from_str(time_str, "%H:%M") {
-                    entries.push(ParsedEntry {
+                    entries.push(ParsedJournalEntry {
                         date,
                         time,
                         title,
@@ -79,7 +79,7 @@ pub fn parse_file_content(content: &str) -> ReadResult {
             }
         }
     }
-    ReadResult { entries, errors }
+    ReadJournalResult { entries, errors }
 }
 
 /// Parses a `NaiveDate` from a markdown header line.
@@ -96,7 +96,7 @@ fn parse_date_from_header_line(line: &str) -> Option<NaiveDate> {
 
 /// Finds words starting with # or @
 /// Matches one or more letters, numbers, or underscores.
-fn extract_tags(text: &str) -> Vec<String> {
+pub fn extract_tags(text: &str) -> Vec<String> {
     let re = Regex::new(r"[@#]\w+").unwrap();
     let mut tags: Vec<String> = re
         .find_iter(text)
@@ -127,7 +127,7 @@ Another paragraph... @health
 
 ### Header 3 is valid
 "#;
-        let result = parse_file_content(content.trim());
+        let result = parse_journal_file_content(content.trim());
         assert_eq!(result.entries.len(), 2);
 
         let expected_date = NaiveDate::from_ymd_opt(2025, 8, 15).unwrap();
@@ -146,14 +146,14 @@ Another paragraph... @health
     #[test]
     fn parse_file_with_no_entries() {
         let content = "# Friday, 15 Aug 2025";
-        let result = parse_file_content(content);
+        let result = parse_journal_file_content(content);
         assert!(result.entries.is_empty());
     }
 
     #[test]
     fn parse_file_with_malformed_header_fails() {
         let content = "# Not a date";
-        let result = parse_file_content(content);
+        let result = parse_journal_file_content(content);
         assert!(result.errors.len() == 1);
         assert!(result.errors[0].contains("Invalid or missing H1 date header"));
     }
@@ -161,7 +161,7 @@ Another paragraph... @health
     #[test]
     fn parse_empty_file_fails() {
         let content = "";
-        let result = parse_file_content(content);
+        let result = parse_journal_file_content(content);
         assert!(result.errors.len() == 1);
         assert!(result.errors[0].contains("Empty file"));
     }
@@ -178,7 +178,7 @@ Body...
 
 Body...
 "#;
-        let result = parse_file_content(content.trim());
+        let result = parse_journal_file_content(content.trim());
         // It should gracefully skip the bad entry and parse the good one.
         assert_eq!(result.entries.len(), 1);
         assert_eq!(result.entries[0].title, "Good entry");
@@ -195,7 +195,7 @@ Body...
 
 With a body.
 "#;
-        let result = parse_file_content(content.trim());
+        let result = parse_journal_file_content(content.trim());
         assert_eq!(result.entries.len(), 2);
         assert_eq!(result.entries[0].title, "Title only");
         assert!(result.entries[0].body.is_empty());
@@ -212,7 +212,7 @@ With a body.
 
 With two equal @tags @tags and another @different_tag.
 "#;
-        let result = parse_file_content(content.trim());
+        let result = parse_journal_file_content(content.trim());
         assert_eq!(result.entries.len(), 2);
         assert_eq!(result.entries[0].tags[0], "@tag");
         assert_eq!(result.entries[1].tags.len(), 2);

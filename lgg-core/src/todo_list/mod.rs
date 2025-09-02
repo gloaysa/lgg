@@ -1,3 +1,4 @@
+mod parse_todos;
 mod todo_entry;
 mod todo_list;
 mod todo_list_paths;
