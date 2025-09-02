@@ -1,8 +1,12 @@
-use clap::{ArgGroup, Parser, arg, command};
-
-use crate::render::ColorMode;
-
 use super::style::Style;
+use crate::render::ColorMode;
+use clap::{ArgGroup, Parser, arg, command};
+use std::io::{self, IsTerminal};
+
+pub struct LoadOptions {
+    pub use_color: bool,
+    pub short_mode: bool,
+}
 
 /// lgg — Simple Markdown journal
 #[derive(Parser, Debug)]
@@ -14,7 +18,7 @@ use super::style::Style;
     group(ArgGroup::new("write_mode").args(["text"])),
     group(ArgGroup::new("solo").args(["path", "all_tags"]).conflicts_with_all(["read_mode", "edit_mode", "write_mode"])),
 )]
-pub struct Cli {
+pub struct BaseCli {
     /// Prints the journal root directory
     #[arg(long, short)]
     pub path: bool,
@@ -59,9 +63,32 @@ pub struct Cli {
     #[arg()]
     pub text: Vec<String>,
 }
-impl Cli {
+impl BaseCli {
     pub fn new() -> Self {
-        let cli = Cli::parse();
+        let cli = BaseCli::parse();
         cli
+    }
+
+    pub fn load(&self) -> LoadOptions {
+        let use_color = match self.color {
+            ColorMode::Always => true,
+            ColorMode::Never => false,
+            ColorMode::Auto => {
+                if std::env::var_os("NO_COLOR").is_some() {
+                    false
+                } else {
+                    io::stdout().is_terminal()
+                }
+            }
+        };
+        let short_mode = match self.style {
+            Style::Short => true,
+            Style::Long => false,
+        };
+
+        LoadOptions {
+            use_color,
+            short_mode,
+        }
     }
 }

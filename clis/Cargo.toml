@@ -3,10 +3,6 @@ name = "lgg-cli"
 version = "0.1.1"
 edition = "2024"
 
-[[bin]]
-name = "lgg"
-path = "src/main.rs"
-
 [dependencies]
 lgg-core = { path = "../lgg-core" }
 clap = { version = "4", features = ["derive", "env"] }
