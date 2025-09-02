@@ -62,12 +62,13 @@ impl TodoList {
         }
 
         Ok(TodoEntry {
-            date: Local::now().date_naive(),
-            time: Local::now().time(),
+            due_date,
+            done_date: None,
             title: input.title,
             body: input.body,
             path: pending_file.clone(),
             status: TodoStatus::Pending,
+            tags: input.tags,
         })
     }
 }

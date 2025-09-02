@@ -290,7 +290,7 @@ impl Journal {
                 continue;
             }
             let month_dir = month_dir(&self.journal_dir, start_date);
-            if !month_dir.exists() {
+            if !month_dir.exists() && start_date.month() < 12 {
                 let year = start_date.year();
                 let next_month = start_date.month() + 1;
                 start_date = NaiveDate::from_ymd_opt(year, next_month, 1).unwrap();

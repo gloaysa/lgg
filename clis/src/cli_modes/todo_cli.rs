@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Result;
 use lgg_core::{
     JournalEntry, JournalWriteEntry, Lgg, QueryError, QueryResult, QueryTagsResult,
-    ReadEntriesOptions,
+    ReadEntriesOptions, TodoEntry, TodoWriteEntry,
 };
 
 enum PrintResult {
@@ -14,12 +14,12 @@ enum PrintResult {
     Tags(QueryTagsResult),
 }
 
-pub struct LggCli {
+pub struct TodoCli {
     cli: BaseCli,
     renderer: Renderer,
     lgg: Lgg,
 }
-impl LggCli {
+impl TodoCli {
     pub fn new(cli: BaseCli, lgg: Lgg) -> Self {
         let options = cli.load();
 
@@ -28,13 +28,13 @@ impl LggCli {
             use_color: options.use_color,
             short_mode: options.short_mode,
         }));
-        LggCli { cli, renderer, lgg }
+        TodoCli { cli, renderer, lgg }
     }
 
     pub fn run(&self) -> Result<()> {
         if self.cli.path {
             self.renderer
-                .print_info(&format!("{}", self.lgg.config.journal_dir.display()));
+                .print_info(&format!("{}", self.lgg.config.todo_list_dir.display()));
             return Ok(());
         }
 
@@ -58,22 +58,33 @@ impl LggCli {
     }
 
     pub fn write_mode(&self) -> Result<CliModeResult> {
-        let new_entry: JournalEntry;
+        let new_entry: TodoEntry;
         if !self.cli.text.is_empty() {
             let inline = self.cli.text.join(" ");
             let parsed_entry = self.lgg.parse_user_input(&inline)?;
-            let entry_to_create = JournalWriteEntry {
-                date: parsed_entry.date,
-                time: parsed_entry.time,
+            let due_date = if parsed_entry.explicit_date {
+                Some(parsed_entry.date)
+            } else {
+                None
+            };
+
+            let time = if parsed_entry.explicit_time {
+                Some(parsed_entry.time)
+            } else {
+                None
+            };
+            let entry_to_create = TodoWriteEntry {
+                due_date,
+                time,
                 title: parsed_entry.title,
                 body: parsed_entry.body,
                 tags: Vec::new(),
             };
 
-            new_entry = self.lgg.journal.create_entry(entry_to_create)?;
+            new_entry = self.lgg.todos.create_entry(entry_to_create)?;
             self.renderer
-                .print_info(&format!("Added new entry to {}", new_entry.path.display()));
-            self.renderer.print_journal_entry_line(&new_entry);
+                .print_info(&format!("Added new todo to {}", new_entry.path.display()));
+            self.renderer.print_todo_entry_line(&new_entry);
             Ok(CliModeResult::Finish)
         } else {
             return Ok(CliModeResult::NothingToDo);

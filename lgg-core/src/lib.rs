@@ -11,3 +11,4 @@ pub use journal::{
     JournalEntry, JournalWriteEntry, QueryError, QueryResult, QueryTagsResult, ReadEntriesOptions,
 };
 pub use lgg::Lgg;
+pub use todo_list::{TodoEntry, TodoList, TodoStatus, TodoWriteEntry};

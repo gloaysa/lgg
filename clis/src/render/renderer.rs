@@ -1,5 +1,5 @@
 use super::theme::OneDark;
-use lgg_core::{JournalEntry, QueryResult};
+use lgg_core::{JournalEntry, QueryResult, TodoEntry, TodoStatus};
 use termimad::{
     MadSkin,
     crossterm::style::{Color, Stylize},
@@ -45,7 +45,7 @@ impl Renderer {
         }
     }
 
-    pub fn print_entry_line(&self, entry: &JournalEntry) {
+    pub fn print_journal_entry_line(&self, entry: &JournalEntry) {
         let mut date = entry.date.to_string();
         let mut time = entry.time.format("%H:%M").to_string();
         let mut title = entry.title.to_string();
@@ -66,15 +66,15 @@ impl Renderer {
         println!("{} {} - {} {}", date, time, title, tags);
     }
 
-    pub fn print_entries<'a>(&self, result: &QueryResult) {
+    pub fn print_journal_entries<'a>(&self, result: &QueryResult) {
         for (i, entry) in result.entries.iter().enumerate() {
+            if self.opts.short_mode {
+                self.print_journal_entry_line(&entry);
+                continue;
+            }
             let date = entry.date.format(&self.opts.date_format).to_string();
             let time = entry.time.format("%H:%M").to_string();
             let title = entry.title.trim();
-            if self.opts.short_mode {
-                self.print_entry_line(&entry);
-                continue;
-            }
             let heading = format!("## {} {}: {}", &date, &time, &title);
 
             let body = if entry.body.trim().is_empty() {
@@ -109,6 +109,46 @@ impl Renderer {
         }
     }
 
+    pub fn print_todo_entry_line(&self, entry: &TodoEntry) {
+        let mut date = match entry.due_date {
+            Some(dt) => {
+                let d = dt.date().format(&self.opts.date_format).to_string();
+                format!("- {d}")
+            }
+            None => "".to_string(),
+        };
+        let mut time = match entry.due_date {
+            Some(dt) => dt.time().format("%H:%M").to_string(),
+            None => "".to_string(),
+        };
+        let mut title = if self.opts.use_color {
+            let icons = todo_icons(&entry.status);
+            let i = icons.color.with(Color::Red);
+            let t = entry.title.clone().with(Color::Yellow);
+            format!("{i} {t}")
+        } else {
+            let icons = todo_icons(&entry.status);
+            let i = icons.no_color;
+            let t = entry.title.clone();
+            format!("{i} {t}")
+        };
+
+        let tags = if entry.tags.is_empty() {
+            String::new()
+        } else if self.opts.use_color {
+            let colored_tags = print_colored_list(&entry.tags);
+            format!("[{}]", colored_tags.join(" - "))
+        } else {
+            format!("[{}]", entry.tags.join(" - "))
+        };
+        if self.opts.use_color {
+            date = date.with(Color::Cyan).to_string();
+            time = time.with(Color::Blue).to_string();
+            title = title.with(Color::Yellow).to_string();
+        }
+        println!("{} {} {} {}", title, date, time, tags);
+    }
+
     pub fn print_tags(&self, tags: &Vec<String>) {
         let tags = if tags.is_empty() {
             String::new()
@@ -129,6 +169,24 @@ fn highlight_tags(body: &str) -> String {
 
 pub fn print_colored_list(values: &Vec<String>) -> Vec<String> {
     values.iter().map(|v| colorize_value(v)).collect()
+}
+
+struct Icons {
+    color: &'static str,
+    no_color: &'static str,
+}
+
+fn todo_icons(status: &TodoStatus) -> Icons {
+    match status {
+        TodoStatus::Pending => Icons {
+            color: "☐",
+            no_color: "[ ]",
+        },
+        TodoStatus::Done => Icons {
+            color: "☑",
+            no_color: "[ ]",
+        },
+    }
 }
 
 fn colorize_value(val: &str) -> String {

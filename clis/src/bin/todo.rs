@@ -1,5 +1,5 @@
 use anyhow::Result;
-use lgg_cli::{BaseCli, LggCli};
+use lgg_cli::{BaseCli, TodoCli};
 use lgg_core::Lgg;
 use std::process::ExitCode;
 
@@ -16,6 +16,6 @@ fn main() -> ExitCode {
 fn run() -> Result<()> {
     let cli = BaseCli::new();
     let lgg = Lgg::new()?;
-    let lgg_cli = LggCli::new(cli, lgg);
-    lgg_cli.run()
+    let todo_cli = TodoCli::new(cli, lgg);
+    todo_cli.run()
 }
