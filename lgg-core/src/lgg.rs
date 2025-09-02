@@ -79,7 +79,7 @@ impl Lgg {
         };
         let parsed_input = parse_raw_user_input(input, Some(opts));
         let date = if let Some(d) = parsed_input.date {
-            exlicit_date = true;
+            explicit_date = true;
             d
         } else {
             self.config.reference_date
