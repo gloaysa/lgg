@@ -1,16 +1,14 @@
 use crate::{
-    BaseCli, RenderOptions,
-    common::{CliModeResult, create_editor_buffer, open_file_in_editor, resolve_editor},
-    render::Renderer,
+    common::{create_editor_buffer, open_file_in_editor, resolve_editor, CliModeResult}, render::Renderer,
+    BaseCli,
+    RenderOptions,
 };
 use anyhow::Result;
-use lgg_core::{
-    JournalEntry, JournalWriteEntry, Lgg, QueryError, QueryResult, QueryTagsResult,
-    ReadEntriesOptions, TodoEntry, TodoWriteEntry,
-};
+use lgg_core::{Lgg, QueryError, ReadTodoOptions, TodoEntry, TodoQueryResult, TodoWriteEntry};
+use lgg_core::entries::QueryTagsResult;
 
 enum PrintResult {
-    Entries(QueryResult),
+    Todos(TodoQueryResult),
     Tags(QueryTagsResult),
 }
 
@@ -96,7 +94,7 @@ impl TodoCli {
             return self.write_mode();
         }
 
-        let new_entry: JournalEntry;
+        let new_entry: TodoEntry;
 
         let editor = resolve_editor(&self.lgg.config.editor)?;
         let input = create_editor_buffer(&editor)?;
@@ -108,18 +106,18 @@ impl TodoCli {
         }
         let inline = self.cli.text.join(" ");
         let parsed_entry = self.lgg.parse_user_input(&inline)?;
-        let entry_to_create = JournalWriteEntry {
-            date: parsed_entry.date,
-            time: parsed_entry.time,
+        let entry_to_create = TodoWriteEntry {
+            due_date: Some(parsed_entry.date),
+            time: Some(parsed_entry.time),
             title: parsed_entry.title,
             body: parsed_entry.body,
             tags: Vec::new(),
         };
 
-        new_entry = self.lgg.journal.create_entry(entry_to_create)?;
+        new_entry = self.lgg.todos.create_entry(entry_to_create)?;
         self.renderer
             .print_info(&format!("Added new entry to {}", new_entry.path.display()));
-        self.renderer.print_journal_entry_line(&new_entry);
+        self.renderer.print_todo_entry_line(&new_entry);
         Ok(CliModeResult::Finish)
     }
 
@@ -129,11 +127,11 @@ impl TodoCli {
         let mut time: Option<&str> = None;
         let mut tags: Option<Vec<String>> = None;
 
-        if self.cli.all_tags {
-            let tags = self.lgg.journal.search_all_tags();
-            self.print_results(&PrintResult::Tags(tags), self.cli.count);
-            return Ok(CliModeResult::Finish);
-        }
+        // if self.cli.all_tags {
+        //     let tags = self.lgg.journal.search_all_tags();
+        //     self.print_results(&PrintResult::Tags(tags), self.cli.count);
+        //     return Ok(CliModeResult::Finish);
+        // }
 
         if let Some(on) = &self.cli.on {
             start_date = Some(on);
@@ -168,37 +166,37 @@ impl TodoCli {
             Some(d) => self.lgg.parse_dates(d, end_date),
             None => None,
         };
-        let options = ReadEntriesOptions {
-            dates,
+        let options = ReadTodoOptions {
+            due_date: dates,
             time,
             tags: self.cli.tags.as_ref(),
             ..Default::default()
         };
-        let result = self.lgg.journal.read_entries(&options);
-        self.print_results(&PrintResult::Entries(result), self.cli.count);
+        let result = self.lgg.todos.read_entries(&options);
+        self.print_results(&PrintResult::Todos(result), self.cli.count);
         Ok(CliModeResult::Finish)
     }
 
     pub fn edit_mode(&self) -> Result<CliModeResult> {
         if let Some(start_date) = &self.cli.edit {
             let dates = self.lgg.parse_dates(start_date, None);
-            let options = ReadEntriesOptions {
-                dates,
+            let options = ReadTodoOptions {
+                due_date: dates,
                 ..Default::default()
             };
-            let results = self.lgg.journal.read_entries(&options);
+            let results = self.lgg.todos.read_entries(&options);
 
-            match results.entries.first() {
+            return match results.todos.first() {
                 Some(entry) => {
                     let editor = resolve_editor(&self.lgg.config.editor)?;
                     open_file_in_editor(&editor, &entry.path)?;
                     self.renderer
                         .print_info(&format!("Edited file {}", entry.path.display()));
-                    return Ok(CliModeResult::Finish);
+                    Ok(CliModeResult::Finish)
                 }
                 None => {
                     self.renderer.print_info("No entries found to edit.");
-                    return Ok(CliModeResult::Finish);
+                    Ok(CliModeResult::Finish)
                 }
             }
         }
@@ -209,9 +207,9 @@ impl TodoCli {
         let mut errors = Vec::new();
         if print_count {
             match result {
-                PrintResult::Entries(res) => {
+                PrintResult::Todos(res) => {
                     self.renderer
-                        .print_info(&format!("{} entries found.", res.entries.len()));
+                        .print_info(&format!("{} entries found.", res.todos.len()));
                 }
                 PrintResult::Tags(res) => {
                     self.renderer
@@ -222,12 +220,12 @@ impl TodoCli {
             return;
         }
 
-        if let PrintResult::Entries(res) = result {
+        if let PrintResult::Todos(res) = result {
             errors.extend(&res.errors);
-            if res.entries.is_empty() {
+            if res.todos.is_empty() {
                 self.renderer.print_info(&format!("No entries found."));
             } else {
-                self.renderer.print_journal_entries(&res);
+                self.renderer.print_todos_entries(&res);
             }
         }
         if let PrintResult::Tags(res) = result {

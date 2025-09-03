@@ -7,5 +7,6 @@ pub mod parsed_entry;
 
 pub use journal::Journal;
 pub use journal_entry::{
-    JournalEntry, JournalWriteEntry, QueryError, QueryResult, QueryTagsResult, ReadEntriesOptions,
+    JournalEntry, JournalQueryResult, JournalWriteEntry, ReadEntriesOptions,
 };
+pub use crate::entries::QueryTagsResult;

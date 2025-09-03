@@ -1,16 +1,17 @@
 use crate::{
-    BaseCli, RenderOptions,
-    common::{CliModeResult, create_editor_buffer, open_file_in_editor, resolve_editor},
-    render::Renderer,
+    common::{create_editor_buffer, open_file_in_editor, resolve_editor, CliModeResult}, render::Renderer,
+    BaseCli,
+    RenderOptions,
 };
 use anyhow::Result;
 use lgg_core::{
-    JournalEntry, JournalWriteEntry, Lgg, QueryError, QueryResult, QueryTagsResult,
+    JournalEntry, JournalQueryResult, JournalWriteEntry, Lgg, QueryError,
     ReadEntriesOptions,
 };
+use lgg_core::entries::QueryTagsResult;
 
 enum PrintResult {
-    Entries(QueryResult),
+    Entries(JournalQueryResult),
     Tags(QueryTagsResult),
 }
 

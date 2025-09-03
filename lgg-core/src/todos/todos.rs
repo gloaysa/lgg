@@ -1,7 +1,7 @@
 use super::{
     parse_todos::parse_todo_file_content,
     todo_entry::{
-        ReadTodoOptions, TodoEntry, TodoQueryError, TodoQueryResult, TodoStatus, TodoWriteEntry,
+        ReadTodoOptions, TodoEntry, TodoQueryResult, TodoStatus, TodoWriteEntry,
     },
     todos_paths::pending_todos_file,
 };
@@ -13,6 +13,7 @@ use std::{
     fs::{self, OpenOptions},
     path::PathBuf,
 };
+use crate::QueryError;
 use crate::todos::format_utils::format_todo_entry_block;
 use crate::utils::date_utils::DateFilter;
 
@@ -88,7 +89,7 @@ impl Todos {
 
         let results = self.parse_file(&pending_file);
 
-        entries.extend(results.entries);
+        entries.extend(results.todos);
         errors.extend(results.errors);
 
         entries.sort_by_key(|k| k.due_date);
@@ -126,18 +127,18 @@ impl Todos {
                 .collect();
         }
 
-        TodoQueryResult { entries, errors }
+        TodoQueryResult { todos: entries, errors }
     }
 
     pub fn parse_file(&self, path: &PathBuf) -> TodoQueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
         if !path.exists() {
-            errors.push(TodoQueryError::FileError {
+            errors.push(QueryError::FileError {
                 path: path.clone(),
                 error: anyhow!(format!("File does not exist in path: {}", path.display())),
             });
-            return TodoQueryResult { entries, errors };
+            return TodoQueryResult { todos: entries, errors };
         }
         match fs::read_to_string(&path) {
             Ok(file_content) => {
@@ -155,20 +156,20 @@ impl Todos {
                 }
 
                 for error in parse_result.errors {
-                    errors.push(TodoQueryError::FileError {
+                    errors.push(QueryError::FileError {
                         path: path.clone(),
                         error: anyhow!(error),
                     });
                 }
             }
             Err(error) => {
-                errors.push(TodoQueryError::FileError {
+                errors.push(QueryError::FileError {
                     path: path.clone(),
                     error: error.into(),
                 });
             }
         }
-        TodoQueryResult { entries, errors }
+        TodoQueryResult { todos: entries, errors }
     }
 }
 
@@ -292,11 +293,11 @@ mod tests {
 
         let result = t.read_entries(&options);
         assert!(result.errors.is_empty());
-        assert_eq!(result.entries.len(), 2);
-        assert_eq!(result.entries[0].title, "First entry.");
-        assert_eq!(result.entries[0].tags.len(), 1);
-        assert_eq!(result.entries[0].body, "With body and @tag.");
-        assert_eq!(result.entries[1].title, "Second entry.");
+        assert_eq!(result.todos.len(), 2);
+        assert_eq!(result.todos[0].title, "First entry.");
+        assert_eq!(result.todos[0].tags.len(), 1);
+        assert_eq!(result.todos[0].body, "With body and @tag.");
+        assert_eq!(result.todos[1].title, "Second entry.");
     }
     #[test]
     fn read_entries_due_date_success() {
@@ -316,10 +317,10 @@ mod tests {
 
         let result = t.read_entries(&options);
         assert!(result.errors.is_empty());
-        assert_eq!(result.entries.len(), 1);
-        assert_eq!(result.entries[0].title, "First entry.");
-        assert_eq!(result.entries[0].due_date.unwrap().date(), NaiveDate::from_ymd_opt(2025, 08, 15).unwrap());
-        assert_eq!(result.entries[0].due_date.unwrap().time(), NaiveTime::from_hms_opt(12, 00, 00).unwrap());
+        assert_eq!(result.todos.len(), 1);
+        assert_eq!(result.todos[0].title, "First entry.");
+        assert_eq!(result.todos[0].due_date.unwrap().date(), NaiveDate::from_ymd_opt(2025, 08, 15).unwrap());
+        assert_eq!(result.todos[0].due_date.unwrap().time(), NaiveTime::from_hms_opt(12, 00, 00).unwrap());
     }
     #[test]
     fn read_entries_filter_single_date() {
@@ -350,8 +351,8 @@ mod tests {
 
         let result = t.read_entries(&options);
         assert!(result.errors.is_empty());
-        assert_eq!(result.entries.len(), 1);
-        assert_eq!(result.entries[0].title, "First entry.");
+        assert_eq!(result.todos.len(), 1);
+        assert_eq!(result.todos[0].title, "First entry.");
     }
 
     #[test]
@@ -392,8 +393,8 @@ mod tests {
 
         let result = t.read_entries(&options);
         assert!(result.errors.is_empty());
-        assert_eq!(result.entries.len(), 1);
-        assert_eq!(result.entries[0].title, "Entry in range.");
+        assert_eq!(result.todos.len(), 1);
+        assert_eq!(result.todos[0].title, "Entry in range.");
     }
 
 }

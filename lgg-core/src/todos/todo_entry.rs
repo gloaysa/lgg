@@ -1,6 +1,7 @@
 use crate::utils::date_utils::DateFilter;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use std::path::PathBuf;
+use crate::QueryError;
 
 #[derive(Clone, Debug)]
 pub enum TodoStatus {
@@ -29,21 +30,12 @@ pub struct TodoWriteEntry {
     pub tags: Vec<String>,
 }
 
-/// Represents a non-critical issue that occurred during a query.
-/// This is used to report problems (e.g., malformed files, invalid input)
-/// without stopping a larger query operation.
-#[derive(Debug)]
-pub enum TodoQueryError {
-    InvalidDate { input: String, error: String },
-    FileError { path: PathBuf, error: anyhow::Error },
-}
-
 /// The complete result of a query.
 /// Contains successfully parsed entries and any errors.
 #[derive(Debug)]
 pub struct TodoQueryResult {
-    pub entries: Vec<TodoEntry>,
-    pub errors: Vec<TodoQueryError>,
+    pub todos: Vec<TodoEntry>,
+    pub errors: Vec<QueryError>,
 }
 
 #[derive(Clone, Debug, Default)]

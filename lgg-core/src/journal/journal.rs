@@ -1,6 +1,6 @@
 //! The core `Journal` struct and its associated types, providing the primary API for interaction.
 use super::journal_entry::{
-    JournalEntry, JournalWriteEntry, QueryError, QueryResult, QueryTagsResult, ReadEntriesOptions,
+    JournalEntry, JournalQueryResult, JournalWriteEntry, ReadEntriesOptions,
 };
 use super::journal_paths::{day_file, month_dir, year_dir};
 use crate::utils::date_utils::time_is_in_range;
@@ -16,6 +16,8 @@ use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
+use crate::entries::QueryTagsResult;
+use crate::QueryError;
 
 /// The central struct for all journal operations.
 ///
@@ -105,13 +107,13 @@ impl Journal {
     /// Reads and returns all entries, the results can be filtered by `options`.
     ///
     /// This is the primary query function for retrieving entries. It is designed to be
-    /// resilient, returning a [`QueryResult`] that contains both parsed entries and
+    /// resilient, returning a [`JournalQueryResult`] that contains both parsed entries and
     /// any errors that occurred.
     ///
     /// # Arguments
     ///
     /// * `options` - Those are filtering options, of type time, date and tags. If none are passed, the function returns all entries.
-    pub fn read_entries(&self, options: &ReadEntriesOptions) -> QueryResult {
+    pub fn read_entries(&self, options: &ReadEntriesOptions) -> JournalQueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
         if let Some(dates) = options.dates {
@@ -156,7 +158,7 @@ impl Journal {
                 .collect();
         }
 
-        QueryResult { entries, errors }
+        JournalQueryResult { entries, errors }
     }
 
     pub fn search_all_tags(&self) -> QueryTagsResult {
@@ -184,7 +186,7 @@ impl Journal {
         QueryTagsResult { tags, errors }
     }
 
-    fn search_all_files(&self) -> QueryResult {
+    fn search_all_files(&self) -> JournalQueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
 
@@ -196,7 +198,7 @@ impl Journal {
             }
         }
 
-        QueryResult { entries, errors }
+        JournalQueryResult { entries, errors }
     }
 
     /// Parses the entire content of a daily journal file.
@@ -214,7 +216,7 @@ impl Journal {
     ///
     /// A `QueryResult` containing a `Vec<JournalEntry>` and `errors` in case some where found,
     /// if the path isn't valid, the file is empty or the header is malformed or a specific entry is invalid.
-    pub fn parse_file(&self, path: &PathBuf) -> QueryResult {
+    pub fn parse_file(&self, path: &PathBuf) -> JournalQueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
         if !path.exists() {
@@ -222,7 +224,7 @@ impl Journal {
                 path: path.clone(),
                 error: anyhow!(format!("File does not exist in path: {}", path.display())),
             });
-            return QueryResult { entries, errors };
+            return JournalQueryResult { entries, errors };
         }
         match fs::read_to_string(&path) {
             Ok(file_content) => {
@@ -252,10 +254,10 @@ impl Journal {
                 });
             }
         }
-        QueryResult { entries, errors }
+        JournalQueryResult { entries, errors }
     }
 
-    fn read_single_date_entry(&self, date: NaiveDate) -> QueryResult {
+    fn read_single_date_entry(&self, date: NaiveDate) -> JournalQueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
         let day_file = day_file(&self.journal_dir, date);
@@ -265,10 +267,10 @@ impl Journal {
             errors.extend(parse_result.errors);
         }
 
-        QueryResult { entries, errors }
+        JournalQueryResult { entries, errors }
     }
 
-    fn read_range_date_entry(&self, range_start: NaiveDate, range_end: NaiveDate) -> QueryResult {
+    fn read_range_date_entry(&self, range_start: NaiveDate, range_end: NaiveDate) -> JournalQueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
 
@@ -277,7 +279,7 @@ impl Journal {
                 input: format!("start date: {} end date: {}", range_start, range_start),
                 error: "End date can't be before a date before the starting date.".to_string(),
             });
-            return QueryResult { entries, errors };
+            return JournalQueryResult { entries, errors };
         }
 
         let mut start_date = range_start;
@@ -306,7 +308,7 @@ impl Journal {
             start_date = start_date.checked_add_days(Days::new(1)).unwrap();
         }
 
-        QueryResult { entries, errors }
+        JournalQueryResult { entries, errors }
     }
 }
 

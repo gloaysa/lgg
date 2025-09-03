@@ -1,5 +1,5 @@
 use super::theme::OneDark;
-use lgg_core::{JournalEntry, QueryResult, TodoEntry, TodoStatus};
+use lgg_core::{JournalEntry, JournalQueryResult, TodoEntry, TodoQueryResult, TodoStatus};
 use termimad::{
     MadSkin,
     crossterm::style::{Color, Stylize},
@@ -66,7 +66,7 @@ impl Renderer {
         println!("{} {} - {} {}", date, time, title, tags);
     }
 
-    pub fn print_journal_entries<'a>(&self, result: &QueryResult) {
+    pub fn print_journal_entries<'a>(&self, result: &JournalQueryResult) {
         for (i, entry) in result.entries.iter().enumerate() {
             if self.opts.short_mode {
                 self.print_journal_entry_line(&entry);
@@ -149,6 +149,39 @@ impl Renderer {
         println!("{} {} {} {}", title, date, time, tags);
     }
 
+    pub fn print_todos_entries<'a>(&self, result: &TodoQueryResult) {
+        for (i, entry) in result.todos.iter().enumerate() {
+            if self.opts.short_mode {
+                self.print_todo_entry_line(&entry);
+                continue;
+            }
+
+            if entry.body.trim().is_empty() {
+                continue;
+            }
+
+            let mut parsed_body = entry.body.trim_end().to_string();
+            parsed_body = highlight_tags(&parsed_body);
+            let spaces = if self.opts.use_color {
+                " ".repeat(2)
+            } else {
+                " ".repeat(4)
+            };
+
+            self.print_todo_entry_line(&entry);
+            println!("{spaces}{parsed_body}");
+
+            if i + 1 < result.todos.len() {
+                println!();
+            }
+
+            if self.opts.use_color {
+                self.print_md("---");
+            } else {
+                println!("---");
+            }
+        }
+    }
     pub fn print_tags(&self, tags: &Vec<String>) {
         let tags = if tags.is_empty() {
             String::new()
