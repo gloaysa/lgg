@@ -28,12 +28,12 @@ pub fn format_todo_entry_block(
         None => (),
     };
     if body.trim().is_empty() {
-        entry = format!("{entry}\n\n");
+        entry = format!("{entry}\n");
         entry
     } else {
         let body = body.trim_end_matches('\n');
         let spaces = " ".repeat(6);
-        entry = format!("{entry}\n{spaces}{body}\n\n");
+        entry = format!("{entry}\n{spaces}{body}\n");
         entry
     }
 }

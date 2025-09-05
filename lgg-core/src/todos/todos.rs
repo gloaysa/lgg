@@ -39,9 +39,9 @@ impl Todos {
         }
 
         let is_new = !todos_file.exists();
-        let header = "# Todos\n".to_string();
-        let todo_subheader = "## Pending\n".to_string();
-        let done_subheader = "## Done\n".to_string();
+        let header = "# Todos\n\n".to_string();
+        let todo_subheader = "## Pending\n\n".to_string();
+        let done_subheader = "## Done\n\n".to_string();
         let block = format_todo_entry_block(
             &input.title,
             &input.body,
@@ -74,8 +74,14 @@ impl Todos {
             all_todos.extend(all_entries.todos);
             all_todos.push(new_entry.clone());
             all_todos.sort_by_key(|e| e.due_date);
-            let pending_todos: Vec<&TodoEntry> = all_todos.iter().filter(|td| matches!(td.status, TodoStatus::Pending)).collect();
-            let done_todos: Vec<&TodoEntry> = all_todos.iter().filter(|td| matches!(td.status, TodoStatus::Done)).collect();
+            let pending_todos: Vec<&TodoEntry> = all_todos
+                .iter()
+                .filter(|td| matches!(td.status, TodoStatus::Pending))
+                .collect();
+            let done_todos: Vec<&TodoEntry> = all_todos
+                .iter()
+                .filter(|td| matches!(td.status, TodoStatus::Done))
+                .collect();
 
             let mut new_content = header;
             new_content.push_str(&todo_subheader);

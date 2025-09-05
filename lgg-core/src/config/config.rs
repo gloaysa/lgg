@@ -68,7 +68,7 @@ impl Config {
 
         let todo_datetime_format = file_config
             .todo_datetime_format
-            .unwrap_or_else(|| "%d/%m/%Y %H:%M)".to_string());
+            .unwrap_or_else(|| "%d/%m/%Y %H:%M".to_string());
 
         let journal_dir = file_config
             .journal_dir
