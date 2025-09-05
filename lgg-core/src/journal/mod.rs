@@ -9,4 +9,3 @@ pub use journal::Journal;
 pub use journal_entry::{
     JournalEntry, JournalQueryResult, JournalWriteEntry, ReadEntriesOptions,
 };
-pub use crate::entries::QueryTagsResult;

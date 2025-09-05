@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use crate::{JournalEntry, TodoEntry};
 
 /// Represents a non-critical issue that occurred during a query.
 /// This is used to report problems (e.g., malformed files, invalid input)

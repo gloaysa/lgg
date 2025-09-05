@@ -21,14 +21,11 @@ impl Renderer {
     pub fn new(config: Option<RenderOptions>) -> Self {
         Self {
             skin: OneDark::default_onedark_skin(),
-            opts: match config {
-                Some(config) => config,
-                None => RenderOptions {
-                    date_format: "%a, %d %b %Y".to_string(),
-                    use_color: true,
-                    short_mode: false,
-                },
-            },
+            opts: config.unwrap_or_else(|| RenderOptions {
+                date_format: "%a, %d %b %Y".to_string(),
+                use_color: true,
+                short_mode: false,
+            }),
         }
     }
 

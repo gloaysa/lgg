@@ -56,8 +56,8 @@ impl TodoCli {
     }
 
     pub fn write_mode(&self) -> Result<CliModeResult> {
-        let new_entry: TodoEntry;
         if !self.cli.text.is_empty() {
+            let new_entry: TodoEntry;
             let inline = self.cli.text.join(" ");
             let parsed_entry = self.lgg.parse_user_input(&inline)?;
             let due_date = if parsed_entry.explicit_date {
@@ -85,7 +85,7 @@ impl TodoCli {
             self.renderer.print_todo_entry_line(&new_entry, true);
             Ok(CliModeResult::Finish)
         } else {
-            return Ok(CliModeResult::NothingToDo);
+            Ok(CliModeResult::NothingToDo)
         }
     }
 
@@ -101,7 +101,7 @@ impl TodoCli {
         let trimmed = input.trim();
         if trimmed.is_empty() {
             self.renderer
-                .print_info(&format!("No entry to save, because no text was received."));
+                .print_info(&"No entry to save, because no text was received.".to_string());
             return Ok(CliModeResult::Finish);
         }
         let inline = self.cli.text.join(" ");
@@ -223,7 +223,7 @@ impl TodoCli {
         if let PrintResult::Todos(res) = result {
             errors.extend(&res.errors);
             if res.todos.is_empty() {
-                self.renderer.print_info(&format!("No entries found."));
+                self.renderer.print_info(&"No entries found.".to_string());
             } else {
                 self.renderer.print_todos_entries(&res);
             }
@@ -231,7 +231,7 @@ impl TodoCli {
         if let PrintResult::Tags(res) = result {
             errors.extend(&res.errors);
             if res.tags.is_empty() {
-                self.renderer.print_info(&format!("No tags found."));
+                self.renderer.print_info(&"No tags found.".to_string());
             } else {
                 self.renderer.print_tags(&res.tags);
             }

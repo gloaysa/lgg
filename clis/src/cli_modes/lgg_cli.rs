@@ -77,7 +77,7 @@ impl LggCli {
             self.renderer.print_journal_entry_line(&new_entry);
             Ok(CliModeResult::Finish)
         } else {
-            return Ok(CliModeResult::NothingToDo);
+            Ok(CliModeResult::NothingToDo)
         }
     }
 
@@ -93,7 +93,7 @@ impl LggCli {
         let trimmed = input.trim();
         if trimmed.is_empty() {
             self.renderer
-                .print_info(&format!("No entry to save, because no text was received."));
+                .print_info(&"No entry to save, because no text was received.".to_string());
             return Ok(CliModeResult::Finish);
         }
         let inline = self.cli.text.join(" ");
@@ -178,17 +178,17 @@ impl LggCli {
             };
             let results = self.lgg.journal.read_entries(&options);
 
-            match results.entries.first() {
+            return match results.entries.first() {
                 Some(entry) => {
                     let editor = resolve_editor(&self.lgg.config.editor)?;
                     open_file_in_editor(&editor, &entry.path)?;
                     self.renderer
                         .print_info(&format!("Edited file {}", entry.path.display()));
-                    return Ok(CliModeResult::Finish);
+                    Ok(CliModeResult::Finish)
                 }
                 None => {
                     self.renderer.print_info("No entries found to edit.");
-                    return Ok(CliModeResult::Finish);
+                    Ok(CliModeResult::Finish)
                 }
             }
         }
@@ -215,7 +215,7 @@ impl LggCli {
         if let PrintResult::Entries(res) = result {
             errors.extend(&res.errors);
             if res.entries.is_empty() {
-                self.renderer.print_info(&format!("No entries found."));
+                self.renderer.print_info(&"No entries found.".to_string());
             } else {
                 self.renderer.print_journal_entries(&res);
             }
@@ -223,7 +223,7 @@ impl LggCli {
         if let PrintResult::Tags(res) = result {
             errors.extend(&res.errors);
             if res.tags.is_empty() {
-                self.renderer.print_info(&format!("No tags found."));
+                self.renderer.print_info(&"No tags found.".to_string());
             } else {
                 self.renderer.print_tags(&res.tags);
             }

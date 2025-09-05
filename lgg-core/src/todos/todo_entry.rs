@@ -9,7 +9,7 @@ pub enum TodoStatus {
     Done,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TodoEntry {
     pub due_date: Option<NaiveDateTime>,
     pub done_date: Option<NaiveDateTime>,

@@ -39,7 +39,7 @@ impl Keywords {
     /// Returns the **global keyword registry** (input → canonical).
     ///
     /// The registry is:
-    /// - **Initialized once** on first access (via [`once_cell::sync::Lazy`]).
+    /// - **Initialized once** on first access (via [`Lazy`]).
     /// - **Thread-safe** (wrapped in [`RwLock`]): many readers or one writer.
     /// - **Lowercased**: all keys are stored lowercased for case-insensitive lookups.
     ///

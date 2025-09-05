@@ -190,7 +190,7 @@ pub fn parse_time_token(s: &str) -> Option<TimeFilter> {
             }
         };
 
-        if let Some((h, m, s)) = parts {
+        return if let Some((h, m, s)) = parts {
             if h == 0 || h > 12 || m > 59 || s > 59 {
                 return None;
             }
@@ -200,9 +200,9 @@ pub fn parse_time_token(s: &str) -> Option<TimeFilter> {
                 (_, true) => h + 12,
                 (_, false) => h,
             };
-            return Some(TimeFilter::Single(NaiveTime::from_hms_opt(h24, m, s)?));
+            Some(TimeFilter::Single(NaiveTime::from_hms_opt(h24, m, s)?))
         } else {
-            return None; // Parsing of h,m,s failed
+            None // Parsing of h,m,s failed
         }
     }
 
@@ -324,12 +324,12 @@ fn parse_prefix<'a>(
                 let (date_part, time_part) = prefix_trim.split_at(pos);
                 let date_part = date_part.trim();
                 let time_part = time_part[word.len()..].trim(); // skip keyword
-                if let Some(date) = parse_date_token(date_part, None, options) {
+                return if let Some(date) = parse_date_token(date_part, None, options) {
                     let time = parse_time_token(time_part);
-                    return (Some(date), time, rest);
+                    (Some(date), time, rest)
                 } else {
                     let time = parse_time_token(time_part);
-                    return (None, time, rest);
+                    (None, time, rest)
                 }
             }
         }

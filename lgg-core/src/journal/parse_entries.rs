@@ -139,7 +139,7 @@ Another paragraph... @health
     fn parse_file_with_malformed_header_fails() {
         let content = "# Not a date";
         let result = parse_journal_file_content(content);
-        assert!(result.errors.len() == 1);
+        assert_eq!(result.errors.len(), 1);
         assert!(result.errors[0].contains("Invalid or missing H1 date header"));
     }
 
@@ -147,7 +147,7 @@ Another paragraph... @health
     fn parse_empty_file_fails() {
         let content = "";
         let result = parse_journal_file_content(content);
-        assert!(result.errors.len() == 1);
+        assert_eq!(result.errors.len(), 1);
         assert!(result.errors[0].contains("Empty file"));
     }
 
@@ -167,7 +167,7 @@ Body...
         // It should gracefully skip the bad entry and parse the good one.
         assert_eq!(result.entries.len(), 1);
         assert_eq!(result.entries[0].title, "Good entry");
-        assert!(result.errors.len() == 1);
+        assert_eq!(result.errors.len(), 1);
         assert!(result.errors[0].contains("Invalid time"));
     }
 

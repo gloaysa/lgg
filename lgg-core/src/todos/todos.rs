@@ -1,7 +1,7 @@
 use super::{
     parse_todos::parse_todo_file_content,
     todo_entry::{ReadTodoOptions, TodoEntry, TodoQueryResult, TodoStatus, TodoWriteEntry},
-    todos_paths::{done_todos_file, pending_todos_file},
+    todos_paths::todos_file,
 };
 use crate::todos::format_utils::format_todo_entry_block;
 use crate::utils::date_utils::DateFilter;
@@ -32,14 +32,16 @@ impl Todos {
             },
             None => None,
         };
-        let pending_file = pending_todos_file(&self.todo_list_dir);
-        if let Some(parent) = pending_file.parent() {
+        let todos_file = todos_file(&self.todo_list_dir);
+        if let Some(parent) = todos_file.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("creating parent directory {}", parent.display()))?;
         }
 
-        let is_new = !pending_file.exists();
-        let header = format!("# All my pending todos\n");
+        let is_new = !todos_file.exists();
+        let header = "# Todos\n".to_string();
+        let todo_subheader = "## Pending\n".to_string();
+        let done_subheader = "## Done\n".to_string();
         let block = format_todo_entry_block(
             &input.title,
             &input.body,
@@ -48,31 +50,63 @@ impl Todos {
             &self.todo_datetime_format,
         );
 
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&pending_file)
-            .with_context(|| format!("opening {}", pending_file.display()))?;
-
-        if is_new {
-            writeln!(file, "{header}n")
-                .with_context(|| format!("writing day header to {}", pending_file.display()))?;
-            write!(file, "{block}")
-                .with_context(|| format!("appending entry to {}", pending_file.display()))?;
-        } else {
-            write!(file, "{block}")
-                .with_context(|| format!("appending entry to {}", pending_file.display()))?;
-        }
-
-        Ok(TodoEntry {
+        let new_entry = TodoEntry {
             due_date,
             done_date: None,
             title: input.title,
             body: input.body,
-            path: pending_file.clone(),
+            path: todos_file.clone(),
             status: TodoStatus::Pending,
             tags: input.tags,
-        })
+        };
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&todos_file)
+            .with_context(|| format!("opening {}", todos_file.display()))?;
+
+        if is_new {
+            writeln!(file, "{header}{todo_subheader}{block}")
+                .with_context(|| format!("writing day header to {}", todos_file.display()))?;
+        } else {
+            let all_entries = self.parse_file(&todos_file);
+            let mut all_todos = Vec::new();
+            all_todos.extend(all_entries.todos);
+            all_todos.push(new_entry.clone());
+            all_todos.sort_by_key(|e| e.due_date);
+            let pending_todos: Vec<&TodoEntry> = all_todos.iter().filter(|td| matches!(td.status, TodoStatus::Pending)).collect();
+            let done_todos: Vec<&TodoEntry> = all_todos.iter().filter(|td| matches!(td.status, TodoStatus::Done)).collect();
+
+            let mut new_content = header;
+            new_content.push_str(&todo_subheader);
+            for td in pending_todos {
+                let block = format_todo_entry_block(
+                    &td.title,
+                    &td.body,
+                    td.due_date,
+                    td.done_date,
+                    &self.todo_datetime_format,
+                );
+                new_content.push_str(&block);
+            }
+
+            if !done_todos.is_empty() {
+                new_content.push_str(&done_subheader);
+                for td in done_todos {
+                    let block = format_todo_entry_block(
+                        &td.title,
+                        &td.body,
+                        td.due_date,
+                        td.done_date,
+                        &self.todo_datetime_format,
+                    );
+                    new_content.push_str(&block);
+                }
+            }
+            fs::write(&todos_file, new_content)?;
+        }
+
+        Ok(new_entry)
     }
 
     /// Reads and returns all entries, the results can be filtered by `options`.
@@ -82,7 +116,7 @@ impl Todos {
     pub fn read_entries(&self, options: &ReadTodoOptions) -> TodoQueryResult {
         let mut entries = Vec::new();
         let mut errors = Vec::new();
-        let pending_file = pending_todos_file(&self.todo_list_dir);
+        let pending_file = todos_file(&self.todo_list_dir);
         if pending_file.exists() {}
 
         let results = self.parse_file(&pending_file);
@@ -134,8 +168,8 @@ impl Todos {
     pub fn search_all_tags(&self) -> QueryTagsResult {
         let mut tags: Vec<String> = Vec::new();
         let mut errors = Vec::new();
-        let pending_file = pending_todos_file(&self.todo_list_dir);
-        let done_file = done_todos_file(&self.todo_list_dir);
+        let pending_file = todos_file(&self.todo_list_dir);
+        let done_file = todos_file(&self.todo_list_dir);
         let pending_todos_result = self.parse_file(&pending_file);
         let done_todos_result = self.parse_file(&done_file);
 
@@ -222,7 +256,7 @@ mod tests {
         tests::mk_config,
         todos::{
             todo_entry::{ReadTodoOptions, TodoStatus, TodoWriteEntry},
-            todos_paths::pending_todos_file,
+            todos_paths::todos_file,
         },
     };
 
@@ -251,12 +285,13 @@ mod tests {
             tags: Vec::new(),
         };
         let res = t.create_entry(entry).unwrap();
-        let expected = pending_todos_file(&t.todo_list_dir);
+        let expected = todos_file(&t.todo_list_dir);
         assert_eq!(res.path, expected);
         assert!(res.path.exists());
 
         let s = fs::read_to_string(&res.path).unwrap();
-        assert!(s.starts_with("# All my pending todos\n"));
+        assert!(s.starts_with("# Todos\n"));
+        assert!(s.contains("## Pending\n"));
         assert!(s.contains("Test entry."));
     }
 
@@ -281,7 +316,8 @@ mod tests {
         let res2 = t.create_entry(entry2).unwrap();
 
         let s = fs::read_to_string(&res2.path).unwrap();
-        assert!(s.starts_with("# All my pending todos\n"));
+        assert!(s.starts_with("# Todos\n"));
+        assert!(s.contains("## Pending\n"));
         assert!(s.contains("First entry."));
         assert!(s.contains("Second entry."));
     }
@@ -473,8 +509,7 @@ mod tests {
             .unwrap();
 
         let results = todos.search_all_tags();
-        // expect error because done_todos file is not created
-        assert_eq!(results.errors.len(), 1);
+        assert_eq!(results.errors.len(), 0);
         assert_eq!(results.tags.len(), 3);
 
         assert!(results.tags.contains(&"@past".to_string()));

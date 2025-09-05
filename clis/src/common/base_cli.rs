@@ -1,6 +1,6 @@
 use super::style::Style;
 use crate::render::ColorMode;
-use clap::{ArgGroup, Parser, arg, command};
+use clap::{ArgGroup, Parser, arg};
 use std::io::{self, IsTerminal};
 
 pub struct LoadOptions {

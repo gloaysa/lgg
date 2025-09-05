@@ -225,7 +225,7 @@ mod tests {
         if let Some(b) = BaseDirs::new() {
             let expected_xdg = b.home_dir().join(".config").join("lgg").join("config.toml");
             let expected_native = b.config_dir().join("lgg").join("config.toml");
-            let c = super::Config::config_file_paths();
+            let c = Config::config_file_paths();
             assert_eq!(c.get(0), Some(&expected_xdg));
             assert_eq!(c.get(1), Some(&expected_native));
         }
@@ -237,7 +237,7 @@ mod tests {
             journal_dir = "/tmp/my-journal"
             editor = "hx"
         "#;
-        let fc = super::Config::parse_file(toml).unwrap();
+        let fc = Config::parse_file(toml).unwrap();
         assert_eq!(
             fc.journal_dir.as_deref(),
             Some(Path::new("/tmp/my-journal"))
@@ -255,10 +255,10 @@ mod tests {
             AYER = "yesterday"
         "#;
 
-        let fc = super::Config::parse_file(toml).unwrap();
+        let fc = Config::parse_file(toml).unwrap();
         assert!(fc.synonyms.is_some());
 
-        super::Config::load_synonyms(&fc.synonyms);
+        Config::load_synonyms(&fc.synonyms);
 
         assert!(Keywords::matches(Keyword::Yesterday, "ytd"));
         assert!(Keywords::matches(Keyword::Yesterday, "ayer"));
@@ -274,10 +274,10 @@ mod tests {
             ytd = "yesterday"
         "#;
 
-        let fc = super::Config::parse_file(toml).unwrap();
+        let fc = Config::parse_file(toml).unwrap();
         assert!(fc.synonyms.is_some());
 
-        super::Config::load_synonyms(&fc.synonyms);
+        Config::load_synonyms(&fc.synonyms);
 
         assert!(!Keywords::matches(Keyword::Yesterday, "today"));
         assert!(Keywords::matches(Keyword::Yesterday, "ytd"));
