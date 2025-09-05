@@ -81,7 +81,7 @@ impl Renderer {
                 String::new()
             } else {
                 let mut parsed_body = entry.body.trim_end().to_string();
-                parsed_body = highlight_tags(&parsed_body);
+                parsed_body = highlight_tags_md(&parsed_body);
                 parsed_body
             };
 
@@ -109,7 +109,7 @@ impl Renderer {
         }
     }
 
-    pub fn print_todo_entry_line(&self, entry: &TodoEntry) {
+    pub fn print_todo_entry_line(&self, entry: &TodoEntry, print_tags: bool) {
         let mut date = match entry.due_date {
             Some(dt) => {
                 let d = dt.date().format(&self.opts.date_format).to_string();
@@ -133,7 +133,7 @@ impl Renderer {
             format!("{i} {t}")
         };
 
-        let tags = if entry.tags.is_empty() {
+        let tags = if entry.tags.is_empty() || !print_tags {
             String::new()
         } else if self.opts.use_color {
             let colored_tags = print_colored_list(&entry.tags);
@@ -146,13 +146,18 @@ impl Renderer {
             time = time.with(Color::Blue).to_string();
             title = title.with(Color::Yellow).to_string();
         }
-        println!("{} {} {} {}", title, date, time, tags);
+
+        if entry.due_date.is_none() {
+            println!("{} {}", title, tags);
+        } else {
+            println!("{} {} {} {}", title, date, time, tags);
+        }
     }
 
     pub fn print_todos_entries<'a>(&self, result: &TodoQueryResult) {
-        for (i, entry) in result.todos.iter().enumerate() {
+        for entry in &result.todos {
             if self.opts.short_mode {
-                self.print_todo_entry_line(&entry);
+                self.print_todo_entry_line(&entry, true);
                 continue;
             }
 
@@ -161,19 +166,15 @@ impl Renderer {
             }
 
             let mut parsed_body = entry.body.trim_end().to_string();
-            parsed_body = highlight_tags(&parsed_body);
+            parsed_body = highlight_tags_plain(&parsed_body);
             let spaces = if self.opts.use_color {
                 " ".repeat(2)
             } else {
                 " ".repeat(4)
             };
 
-            self.print_todo_entry_line(&entry);
+            self.print_todo_entry_line(&entry, false);
             println!("{spaces}{parsed_body}");
-
-            if i + 1 < result.todos.len() {
-                println!();
-            }
 
             if self.opts.use_color {
                 self.print_md("---");
@@ -195,9 +196,18 @@ impl Renderer {
     }
 }
 
-fn highlight_tags(body: &str) -> String {
+fn highlight_tags_md(body: &str) -> String {
     let re = regex::Regex::new(r"(?m)(^|\s)@([A-Za-z0-9_][\w-]*)").unwrap();
     re.replace_all(body, "$1`@$2`").to_string()
+}
+
+fn highlight_tags_plain(body: &str) -> String {
+    let re = regex::Regex::new(r"(?m)(^|\s)@([A-Za-z0-9_][\w-]*)").unwrap();
+    re.replace_all(body, |capture: &regex::Captures<'_>| {
+        let tag = colorize_value(&capture[2]);
+        format!("{}@{}", &capture[1], &tag)
+    })
+    .to_string()
 }
 
 pub fn print_colored_list(values: &Vec<String>) -> Vec<String> {
@@ -228,7 +238,6 @@ fn colorize_value(val: &str) -> String {
         Color::DarkRed,
         Color::Green,
         Color::DarkGreen,
-        Color::Yellow,
         Color::DarkYellow,
         Color::Blue,
         Color::DarkBlue,
@@ -236,7 +245,6 @@ fn colorize_value(val: &str) -> String {
         Color::DarkMagenta,
         Color::Cyan,
         Color::DarkCyan,
-        Color::Grey,
     ];
 
     fn stable_index(s: &str, modulo: usize) -> usize {

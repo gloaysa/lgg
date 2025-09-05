@@ -1,11 +1,11 @@
 use crate::{
-    common::{create_editor_buffer, open_file_in_editor, resolve_editor, CliModeResult}, render::Renderer,
-    BaseCli,
-    RenderOptions,
+    BaseCli, RenderOptions,
+    common::{CliModeResult, create_editor_buffer, open_file_in_editor, resolve_editor},
+    render::Renderer,
 };
 use anyhow::Result;
-use lgg_core::{Lgg, QueryError, ReadTodoOptions, TodoEntry, TodoQueryResult, TodoWriteEntry};
 use lgg_core::entries::QueryTagsResult;
+use lgg_core::{Lgg, QueryError, ReadTodoOptions, TodoEntry, TodoQueryResult, TodoWriteEntry};
 
 enum PrintResult {
     Todos(TodoQueryResult),
@@ -82,7 +82,7 @@ impl TodoCli {
             new_entry = self.lgg.todos.create_entry(entry_to_create)?;
             self.renderer
                 .print_info(&format!("Added new todo to {}", new_entry.path.display()));
-            self.renderer.print_todo_entry_line(&new_entry);
+            self.renderer.print_todo_entry_line(&new_entry, true);
             Ok(CliModeResult::Finish)
         } else {
             return Ok(CliModeResult::NothingToDo);
@@ -117,7 +117,7 @@ impl TodoCli {
         new_entry = self.lgg.todos.create_entry(entry_to_create)?;
         self.renderer
             .print_info(&format!("Added new entry to {}", new_entry.path.display()));
-        self.renderer.print_todo_entry_line(&new_entry);
+        self.renderer.print_todo_entry_line(&new_entry, true);
         Ok(CliModeResult::Finish)
     }
 
@@ -127,11 +127,11 @@ impl TodoCli {
         let mut time: Option<&str> = None;
         let mut tags: Option<Vec<String>> = None;
 
-        // if self.cli.all_tags {
-        //     let tags = self.lgg.journal.search_all_tags();
-        //     self.print_results(&PrintResult::Tags(tags), self.cli.count);
-        //     return Ok(CliModeResult::Finish);
-        // }
+        if self.cli.all_tags {
+            let tags = self.lgg.todos.search_all_tags();
+            self.print_results(&PrintResult::Tags(tags), self.cli.count);
+            return Ok(CliModeResult::Finish);
+        }
 
         if let Some(on) = &self.cli.on {
             start_date = Some(on);
@@ -198,7 +198,7 @@ impl TodoCli {
                     self.renderer.print_info("No entries found to edit.");
                     Ok(CliModeResult::Finish)
                 }
-            }
+            };
         }
         Ok(CliModeResult::NothingToDo)
     }

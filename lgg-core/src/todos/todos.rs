@@ -1,21 +1,19 @@
 use super::{
     parse_todos::parse_todo_file_content,
-    todo_entry::{
-        ReadTodoOptions, TodoEntry, TodoQueryResult, TodoStatus, TodoWriteEntry,
-    },
-    todos_paths::pending_todos_file,
+    todo_entry::{ReadTodoOptions, TodoEntry, TodoQueryResult, TodoStatus, TodoWriteEntry},
+    todos_paths::{done_todos_file, pending_todos_file},
 };
+use crate::todos::format_utils::format_todo_entry_block;
+use crate::utils::date_utils::DateFilter;
+use crate::{QueryError, QueryTagsResult};
 use anyhow::anyhow;
 use anyhow::{Context, Result};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
-use std::io::Write;
+use std::{collections::HashSet, io::Write};
 use std::{
     fs::{self, OpenOptions},
     path::PathBuf,
 };
-use crate::QueryError;
-use crate::todos::format_utils::format_todo_entry_block;
-use crate::utils::date_utils::DateFilter;
 
 #[derive(Debug)]
 pub struct Todos {
@@ -127,7 +125,39 @@ impl Todos {
                 .collect();
         }
 
-        TodoQueryResult { todos: entries, errors }
+        TodoQueryResult {
+            todos: entries,
+            errors,
+        }
+    }
+
+    pub fn search_all_tags(&self) -> QueryTagsResult {
+        let mut tags: Vec<String> = Vec::new();
+        let mut errors = Vec::new();
+        let pending_file = pending_todos_file(&self.todo_list_dir);
+        let done_file = done_todos_file(&self.todo_list_dir);
+        let pending_todos_result = self.parse_file(&pending_file);
+        let done_todos_result = self.parse_file(&done_file);
+
+        errors.extend(pending_todos_result.errors);
+        errors.extend(done_todos_result.errors);
+
+        for todo in pending_todos_result.todos {
+            tags.extend(todo.tags);
+        }
+        for todo in done_todos_result.todos {
+            tags.extend(todo.tags);
+        }
+
+        tags = tags
+            .iter()
+            .map(|mat| mat.as_str().to_string().trim().to_ascii_lowercase())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        tags.sort();
+
+        QueryTagsResult { tags, errors }
     }
 
     pub fn parse_file(&self, path: &PathBuf) -> TodoQueryResult {
@@ -138,11 +168,15 @@ impl Todos {
                 path: path.clone(),
                 error: anyhow!(format!("File does not exist in path: {}", path.display())),
             });
-            return TodoQueryResult { todos: entries, errors };
+            return TodoQueryResult {
+                todos: entries,
+                errors,
+            };
         }
         match fs::read_to_string(&path) {
             Ok(file_content) => {
-                let parse_result = parse_todo_file_content(&file_content, &self.todo_datetime_format);
+                let parse_result =
+                    parse_todo_file_content(&file_content, &self.todo_datetime_format);
                 for entry in parse_result.entries {
                     entries.push(TodoEntry {
                         due_date: entry.due_date,
@@ -169,7 +203,10 @@ impl Todos {
                 });
             }
         }
-        TodoQueryResult { todos: entries, errors }
+        TodoQueryResult {
+            todos: entries,
+            errors,
+        }
     }
 }
 
@@ -179,6 +216,8 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
+    use super::Todos;
+    use crate::utils::date_utils::DateFilter;
     use crate::{
         tests::mk_config,
         todos::{
@@ -186,12 +225,8 @@ mod tests {
             todos_paths::pending_todos_file,
         },
     };
-    use crate::utils::date_utils::DateFilter;
-    use super::Todos;
 
-    fn mk_todo_list_with_default(
-        reference_date: Option<NaiveDate>,
-    ) -> (Todos, tempfile::TempDir) {
+    fn mk_todo_list_with_default(reference_date: Option<NaiveDate>) -> (Todos, tempfile::TempDir) {
         let tmp = tempdir().unwrap();
         let root = tmp.path().to_path_buf();
         let config = mk_config(root, reference_date);
@@ -319,8 +354,14 @@ mod tests {
         assert!(result.errors.is_empty());
         assert_eq!(result.todos.len(), 1);
         assert_eq!(result.todos[0].title, "First entry.");
-        assert_eq!(result.todos[0].due_date.unwrap().date(), NaiveDate::from_ymd_opt(2025, 08, 15).unwrap());
-        assert_eq!(result.todos[0].due_date.unwrap().time(), NaiveTime::from_hms_opt(12, 00, 00).unwrap());
+        assert_eq!(
+            result.todos[0].due_date.unwrap().date(),
+            NaiveDate::from_ymd_opt(2025, 08, 15).unwrap()
+        );
+        assert_eq!(
+            result.todos[0].due_date.unwrap().time(),
+            NaiveTime::from_hms_opt(12, 00, 00).unwrap()
+        );
     }
     #[test]
     fn read_entries_filter_single_date() {
@@ -397,4 +438,47 @@ mod tests {
         assert_eq!(result.todos[0].title, "Entry in range.");
     }
 
+    #[test]
+    fn find_all_tags() {
+        let anchor = NaiveDate::from_ymd_opt(2025, 08, 04).unwrap(); // A day in 2025
+        let (todos, _tmp) = mk_todo_list_with_default(Some(anchor));
+
+        todos
+            .create_entry(TodoWriteEntry {
+                due_date: Some(NaiveDate::from_ymd_opt(2025, 8, 14).unwrap()),
+                time: Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()),
+                title: "Day in the past with @past tag.".to_string(),
+                body: "".to_string(),
+                tags: Vec::new(),
+            })
+            .unwrap();
+        todos
+            .create_entry(TodoWriteEntry {
+                due_date: Some(NaiveDate::from_ymd_opt(2025, 8, 14).unwrap()),
+                time: Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()),
+                title: "Day way in the future with @future. Has @double_tag in body.".to_string(),
+                body: "".to_string(),
+                tags: Vec::new(),
+            })
+            .unwrap();
+
+        todos
+            .create_entry(TodoWriteEntry {
+                due_date: Some(NaiveDate::from_ymd_opt(2025, 8, 14).unwrap()),
+                time: Some(NaiveTime::from_hms_opt(8, 0, 0).unwrap()),
+                title: "Has a tag in body".to_string(),
+                body: "This is another @double_tag".to_string(),
+                tags: Vec::new(),
+            })
+            .unwrap();
+
+        let results = todos.search_all_tags();
+        // expect error because done_todos file is not created
+        assert_eq!(results.errors.len(), 1);
+        assert_eq!(results.tags.len(), 3);
+
+        assert!(results.tags.contains(&"@past".to_string()));
+        assert!(results.tags.contains(&"@double_tag".to_string()));
+        assert!(results.tags.contains(&"@future".to_string()));
+    }
 }
