@@ -58,7 +58,7 @@ mod tests {
         let format = "%d/%m/%Y %H:%M";
         let e = format_todo_entry_block("Item 1", "", None, None, format);
 
-        assert_eq!(e, "- [ ] Item 1\n\n");
+        assert_eq!(e, "- [ ] Item 1\n");
     }
 
     #[test]
@@ -66,7 +66,7 @@ mod tests {
         let format = "%d/%m/%Y %H:%M";
         let e = format_todo_entry_block("Item 1", "With body", None, None, format);
 
-        assert_eq!(e, "- [ ] Item 1\n      With body\n\n");
+        assert_eq!(e, "- [ ] Item 1\n      With body\n");
     }
 
     #[test]
@@ -77,7 +77,7 @@ mod tests {
         let format = "%d/%m/%Y %H:%M";
         let e = format_todo_entry_block("Item 1", "", Some(due_date), None, format);
 
-        assert_eq!(e, "- [ ] Item 1 | 20/08/2025 07:00\n\n");
+        assert_eq!(e, "- [ ] Item 1 | 20/08/2025 07:00\n");
     }
 
     #[test]
@@ -91,7 +91,7 @@ mod tests {
         let format = "%d/%m/%Y %H:%M";
         let e = format_todo_entry_block("Item 1", "", Some(due_date), Some(done_date), format);
 
-        assert_eq!(e, "- [ ] Item 1 | 20/08/2025 07:00 | 22/08/2025 18:00\n\n");
+        assert_eq!(e, "- [ ] Item 1 | 20/08/2025 07:00 | 22/08/2025 18:00\n");
     }
     #[test]
     fn todo_entry_block_only_end_date() {
@@ -101,6 +101,6 @@ mod tests {
         let format = "%d/%m/%Y %H:%M";
         let e = format_todo_entry_block("Item 1", "", None, Some(done_date), format);
 
-        assert_eq!(e, "- [ ] Item 1 | | 22/08/2025 18:00\n\n");
+        assert_eq!(e, "- [ ] Item 1 | | 22/08/2025 18:00\n");
     }
 }
